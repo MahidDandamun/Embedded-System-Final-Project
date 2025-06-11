@@ -1,4 +1,4 @@
-Thank you for the details! Here’s a complete README.md draft for your project:
+
 
 ---
 
@@ -69,5 +69,3 @@ git clone https://github.com/MahidDandamun/Embedded-System-Final-Project.git
 This project is licensed under the [MIT License](LICENSE).
 
 ---
-
-Feel free to further edit this README to include more detailed setup instructions or links to specific subdirectories! Let me know if you want to add a project logo, wiring diagrams, or setup screenshots.
