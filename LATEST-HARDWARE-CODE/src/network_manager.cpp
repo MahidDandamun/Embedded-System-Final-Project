@@ -5,7 +5,6 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
-// Use constants from config.h instead of hardcoded values
 const char *mqttServer = MQTT_SERVER;
 const int mqttPort = MQTT_PORT;
 const char *deviceId = DEVICE_ID;
@@ -13,95 +12,179 @@ const char *sasToken = SAS_TOKEN;
 const char *mqttUsername = MQTT_USERNAME;
 const char *databaseEndpoint = DATABASE_ENDPOINT;
 
-// Global MQTT objects
 WiFiClientSecure wifiClient;
 PubSubClient mqttClient(wifiClient);
 
 void setupMQTT()
 {
-  wifiClient.setInsecure(); // For testing only - use proper certs in production
+  setupTime();
+  wifiClient.setInsecure(); // For testing only
+
   mqttClient.setServer(mqttServer, mqttPort);
   mqttClient.setCallback(handleMQTTCallback);
   mqttClient.setBufferSize(MQTT_BUFFER_SIZE);
+  mqttClient.setKeepAlive(120);
 
-  connectMQTT();
+  mqttClient.disconnect();
+  delay(100);
+
+  Serial.println("\n=== Setting up MQTT Connection ===");
+  if (connectMQTT())
+  {
+    Serial.println("✓ MQTT Setup Complete");
+  }
+  else
+  {
+    Serial.println("✗ MQTT Setup Failed");
+  }
+  Serial.println("===============================\n");
 }
 
 bool connectMQTT()
 {
-  if (mqttClient.connected())
-    return true;
+  const int maxRetries = 3;
+  int retryCount = 0;
 
-  Serial.println("Connecting to Azure IoT Hub...");
-  if (mqttClient.connect(deviceId, mqttUsername, sasToken))
+  while (retryCount < maxRetries && !mqttClient.connected())
   {
-    Serial.println("Connected to Azure IoT Hub");
-    String methodTopic = "$iothub/methods/POST/#";
-    mqttClient.subscribe(methodTopic.c_str());
-    return true;
+    Serial.println("Connecting to Azure IoT Hub...");
+    Serial.printf("Server: %s\n", mqttServer);
+    Serial.printf("Port: %d\n", mqttPort);
+    Serial.printf("Username: %s\n", mqttUsername);
+
+    String clientId = String(DEVICE_ID);
+
+    if (mqttClient.connect(clientId.c_str(), mqttUsername, sasToken))
+    {
+      Serial.println("Connected to Azure IoT Hub");
+
+      mqttClient.subscribe("$iothub/methods/POST/#");
+      mqttClient.subscribe("$iothub/twin/PATCH/properties/desired/#");
+
+      feederSystem.mqttConnected = true;
+      return true;
+    }
+
+    retryCount++;
+    Serial.printf("Failed to connect, attempt %d of %d\n", retryCount, maxRetries);
+    Serial.printf("MQTT State: %d\n", mqttClient.state());
+    delay(5000 * retryCount);
   }
 
-  Serial.println("Failed to connect to Azure IoT Hub");
+  feederSystem.mqttConnected = false;
+  Serial.println("Failed to connect to Azure IoT Hub after all retries");
   return false;
 }
 
 void handleMQTTCallback(char *topic, byte *payload, unsigned int length)
 {
-  // Handle incoming messages
   String message = String((char *)payload, length);
   Serial.printf("Message received on topic: %s\n", topic);
 }
 
+bool sendToDatabase()
+{
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.println("ERROR: WiFi not connected");
+    return false;
+  }
+
+  HTTPClient https;
+  https.begin("https://petfeeder-embedded.azurewebsites.net/api/devices/status");
+
+  https.addHeader("Content-Type", "application/json");
+  https.addHeader("Accept", "application/json");
+
+  StaticJsonDocument<512> doc;
+  doc["device_id"] = DEVICE_ID;
+  doc["timestamp"] = feederSystem.rtcReady ? formatDateTime(rtc.now()) : String(millis());
+  doc["bowl_weight"] = sensors.weight;
+  doc["container_level"] = String(sensors.foodLevel);
+  doc["pet_status"] = feederSystem.animalDetected;
+
+  String jsonStr;
+  serializeJson(doc, jsonStr);
+
+  Serial.println("Sending HTTP POST to database...");
+  Serial.println(jsonStr);
+
+  int httpCode = https.POST(jsonStr);
+
+  if (httpCode > 0)
+  {
+    Serial.printf("Database Response Code: %d\n", httpCode);
+    String response = https.getString();
+    Serial.printf("Response: %s\n", response.c_str());
+  }
+  else
+  {
+    Serial.printf("✗ HTTP POST failed, error: %s\n", https.errorToString(httpCode).c_str());
+  }
+
+  https.end();
+
+  return httpCode == 200 || httpCode == 201;
+}
+
 void sendSensorDataToAzure()
 {
-  Serial.println("=== Attempting to send data to Azure IoT Hub ===");
+  Serial.println("\n=== Attempting to send data to Azure IoT Hub ===");
 
-  if (!mqttClient.connected() && !connectMQTT())
+  if (!mqttClient.connected())
   {
-    Serial.println("ERROR: Failed to connect to MQTT broker");
-    return;
+    Serial.println("Reconnecting to MQTT...");
+    if (!connectMQTT())
+    {
+      Serial.println("✗ Failed to reconnect to MQTT");
+      return;
+    }
   }
 
   StaticJsonDocument<1024> doc;
 
-  // Generate UUID
   char id[37];
   snprintf(id, sizeof(id), "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
            random(0, 0xffff), random(0, 0xffff), random(0, 0xffff),
            random(0, 0xffff), random(0, 0xffff), random(0, 0xffff),
            random(0, 0xffff), random(0, 0xffff));
 
-  // Required fields matching DB schema
-  doc["id"] = id;
-  doc["bowl_weight"] = sensors.weight;
-  doc["container_level"] = String(sensors.foodLevel);
-  doc["pet_status"] = feederSystem.animalDetected;
-  doc["distance_cm"] = sensors.distance;
-  doc["daily_food_dispensed"] = sensors.dailyFoodDispensed;
-  doc["timestamp"] = feederSystem.rtcReady ? formatDateTime(rtc.now()) : "";
+  JsonObject telemetry = doc.createNestedObject("telemetry");
+  telemetry["messageType"] = "deviceTelemetry";
+  telemetry["id"] = id;
+  telemetry["timestamp"] = feederSystem.rtcReady ? formatDateTime(rtc.now()) : String(millis());
+  telemetry["bowl_weight"] = sensors.weight;
+  telemetry["container_level"] = String(sensors.foodLevel);
+  telemetry["pet_status"] = feederSystem.animalDetected;
+
+  doc["properties"] = "iothub-content-type=application/json";
 
   char payload[1024];
   size_t len = serializeJson(doc, payload, sizeof(payload));
 
-  // Print the JSON payload being sent
-  Serial.println("JSON Payload:");
-  Serial.println(payload);
-  Serial.printf("Payload size: %d bytes\n", len);
+  String topic = String("devices/") + DEVICE_ID + "/messages/events/$.ct=application%2Fjson&$.ce=utf-8";
 
-  // Send to Azure IoT Hub
-  String topic = "devices/" + String(deviceId) + "/messages/events/";
+  Serial.println("JSON Payload:");
+  serializeJsonPretty(doc, Serial);
+  Serial.printf("\nPayload size: %d bytes\n", len);
   Serial.printf("Publishing to topic: %s\n", topic.c_str());
 
   if (mqttClient.publish(topic.c_str(), payload, len))
   {
     Serial.println("✓ Data sent to Azure IoT Hub successfully");
     feederSystem.mqttConnected = true;
+    feederSystem.backendConnected = true;
+
+    // Send data to backend database
+    sendToDatabase();
   }
   else
   {
     Serial.println("✗ Failed to send data to Azure IoT Hub");
     feederSystem.mqttConnected = false;
+    feederSystem.backendConnected = false;
   }
+
   Serial.println("=== End of Azure IoT Hub transmission ===\n");
 }
 
@@ -110,126 +193,70 @@ void handleBackendCommunication()
   unsigned long currentMillis = millis();
   if (currentMillis - timing.lastDataSync >= DATA_SYNC_INTERVAL)
   {
-    // Send data to Azure IoT Hub (this is working)
     sendSensorDataToAzure();
-
-    // ALSO send directly to database (add this)
-    sendStatusDataToPHP();
-
     checkForRemoteCommands();
-
     timing.lastDataSync = currentMillis;
   }
 
-  // Handle MQTT loop
   if (mqttClient.connected())
   {
     mqttClient.loop();
   }
 }
 
-bool sendStatusDataToPHP()
+void setupTime()
 {
-  Serial.println("=== Attempting to send status data to PHP backend ===");
-
-  String queryString = "?device_name=" + String(DEVICE_NAME);
-  queryString += "&timestamp=" + (feederSystem.rtcReady ? formatDateTime(rtc.now()) : "");
-  queryString += "&current_time=" + (feederSystem.rtcReady ? formatTime(rtc.now()) : "");
-  queryString += "&bowl_weight=" + String(sensors.weight, 1);
-  queryString += "&food_level=" + String(sensors.foodLevel);
-  queryString += "&bowl_status=" + String(sensors.bowlStatus);
-  queryString += "&daily_food_dispensed=" + String(sensors.dailyFoodDispensed, 1);
-  queryString += "&total_food_dispensed=" + String(sensors.totalFoodDispensed, 1);
-  queryString += "&auto_feeding_enabled=" + String(feederSystem.autoFeedingEnabled ? "1" : "0");
-  queryString += "&scheduled_feeding_mode=" + String(feederSystem.scheduledFeedingMode ? "1" : "0");
-  queryString += "&refill_mode=" + String(feederSystem.refillMode ? "1" : "0");
-  queryString += "&dispensing=" + String(feederSystem.dispensing ? "1" : "0");
-  queryString += "&animal_detected=" + String(feederSystem.animalDetected ? "1" : "0");
-  queryString += "&distance_cm=" + String(sensors.distance, 1);
-  queryString += "&feeding_status=" + String(sensors.feedingStatus);
-  queryString += "&weight_based_feeding=" + String(feederSystem.weightBasedFeeding ? "1" : "0");
-  queryString += "&next_feed_time=" + String(timeData.nextFeedTimeString);
-  queryString += "&last_feeding_minutes_ago=" + String((millis() - timing.lastFeedingTime) / 60000);
-  queryString += "&uptime_seconds=" + String(millis() / 1000);
-  queryString += "&wifi_connected=" + String(WiFi.status() == WL_CONNECTED ? "1" : "0");
-  queryString += "&wifi_rssi=" + String(WiFi.RSSI());
-  queryString += "&rtc_initialized=" + String(feederSystem.rtcReady ? "1" : "0");
-  queryString += "&backend_connected=" + String(feederSystem.backendConnected ? "1" : "0");
-
-  Serial.printf("Query String: %s\n", queryString.c_str());
-
-  bool result = sendHTTPRequest("/status", queryString);
-
-  if (result)
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  Serial.print("Waiting for NTP time sync: ");
+  time_t nowSecs = time(nullptr);
+  while (nowSecs < 8 * 3600 * 2)
   {
-    Serial.println("✓ Status data sent to PHP backend successfully");
+    delay(500);
+    Serial.print(".");
+    yield();
+    nowSecs = time(nullptr);
   }
-  else
-  {
-    Serial.println("✗ Failed to send status data to PHP backend");
-  }
-
-  Serial.println("=== End of PHP backend transmission ===\n");
-  return result;
-}
-
-bool sendFeedingDataToPHP(String feedingType, float amount, String timestamp)
-{
-  String queryString = "?device_name=" + String(DEVICE_NAME);
-  queryString += "&feeding_type=" + feedingType;
-  queryString += "&amount_grams=" + String(amount, 1);
-  queryString += "&timestamp=" + timestamp;
-  queryString += "&bowl_weight=" + String(sensors.weight, 1);
-  queryString += "&food_level=" + String(sensors.foodLevel);   // Convert char array to String
-  queryString += "&bowl_status=" + String(sensors.bowlStatus); // Convert char array to String
-  queryString += "&daily_total=" + String(sensors.dailyFoodDispensed, 1);
-  queryString += "&session_total=" + String(sensors.totalFoodDispensed, 1);
-
-  return sendHTTPRequest("/feed", queryString);
-}
-
-bool sendSensorDataToPHP()
-{
-  String queryString = "?device_name=" + String(DEVICE_NAME);
-  queryString += "&timestamp=" + (feederSystem.rtcReady ? formatDateTime(rtc.now()) : "");
-  return sendHTTPRequest("/sensor", queryString);
+  Serial.println(" synchronized!");
+  struct tm timeinfo;
+  gmtime_r(&nowSecs, &timeinfo);
+  Serial.printf("Current time: %s", asctime(&timeinfo));
 }
 
 bool checkForRemoteCommands()
 {
-  // Implementation for checking remote commands
   return true;
 }
 
-bool sendHTTPRequest(String path, String queryString)
+void handleDirectMethod(char *topic, byte *payload, unsigned int length)
 {
-  if (WiFi.status() != WL_CONNECTED)
+  Serial.printf("Direct method received on topic: %s\n", topic);
+
+  String topicStr = String(topic);
+  int methodStart = topicStr.indexOf("POST/") + 5;
+  int methodEnd = topicStr.indexOf("/", methodStart);
+  String methodName = topicStr.substring(methodStart, methodEnd);
+
+  Serial.printf("Method name: %s\n", methodName.c_str());
+
+  int ridStart = topicStr.indexOf("$rid=") + 5;
+  String requestId = topicStr.substring(ridStart);
+
+  String responseTopic = "$iothub/methods/res/200/?$rid=" + requestId;
+  String responsePayload = "{\"status\":\"Method received but not implemented\"}";
+
+  mqttClient.publish(responseTopic.c_str(), responsePayload.c_str());
+}
+
+bool verifyMessageDelivery()
+{
+  unsigned long startTime = millis();
+  while (millis() - startTime < 5000)
   {
-    Serial.println("ERROR: WiFi not connected");
-    return false;
+    if (mqttClient.loop())
+    {
+      return true;
+    }
+    delay(100);
   }
-
-  HTTPClient http;
-  String fullURL = String(DATABASE_ENDPOINT) + path + queryString;
-
-  Serial.printf("Full URL: %s\n", fullURL.c_str());
-
-  http.begin(fullURL);
-  http.setTimeout(10000); // 10 second timeout
-
-  int httpResponseCode = http.GET();
-
-  Serial.printf("HTTP Response Code: %d\n", httpResponseCode);
-
-  if (httpResponseCode > 0)
-  {
-    String response = http.getString();
-    Serial.printf("Response: %s\n", response.c_str());
-  }
-
-  bool success = (httpResponseCode == 200);
-  feederSystem.backendConnected = success;
-
-  http.end();
-  return success;
+  return false;
 }

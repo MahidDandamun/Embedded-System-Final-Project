@@ -28,9 +28,6 @@ void testDataSending()
   // Test Azure IoT Hub
   sendSensorDataToAzure();
 
-  // Test PHP backend
-  sendStatusDataToPHP();
-
   Serial.println("=== End of manual test ===\n");
 }
 

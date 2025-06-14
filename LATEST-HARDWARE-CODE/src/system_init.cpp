@@ -3,19 +3,25 @@
 
 void systemStart()
 {
-  Serial.begin(115200); // Add serial initialization
+  Serial.begin(115200);
+  delay(100); // Allow serial to initialize
+
+  Serial.println("\n=== System Starting ===");
+
   initializeLCD();
   initializeRTC();
   initializePins();
   initializeWiFi();
   initializeSensors();
-  feederSystem.initialized = true;
 
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Pet Feeder Ready");
-  lcd.setCursor(0, 1);
-  lcd.print("HTTP Mode");
+  // Only setup MQTT once after WiFi is connected
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    setupMQTT();
+  }
+
+  feederSystem.initialized = true;
+  Serial.println("=== System Initialization Complete ===\n");
 }
 
 void initializeLCD()

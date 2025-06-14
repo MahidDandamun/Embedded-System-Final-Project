@@ -6,8 +6,8 @@
 #include <RTClib.h>
 
 // WiFi Configuration
-#define WIFI_SSID "CARLA"
-#define WIFI_PASSWORD "1234pochie"
+#define WIFI_SSID "GlobeAtHome_D08BD_2.4"
+#define WIFI_PASSWORD "SkA4B8hC"
 #define WIFI_RETRY_ATTEMPTS 20
 
 // Device Configuration
@@ -94,7 +94,7 @@
 #define MQTT_SERVER "doggoHardware.azure-devices.net"
 #define MQTT_PORT 8883
 #define DEVICE_ID "petfeeder"
-#define SAS_TOKEN "SharedAccessSignature sr=doggoHardware.azure-devices.net%2Fdevices%2Fpetfeeder&sig=gBqgHTLzDwngI1Xw%2BfpzEuvCd4v3rg2lv9yTR4pP444%3D&se=1752043176"
+#define SAS_TOKEN "SharedAccessSignature sr=doggoHardware.azure-devices.net%2Fdevices%2Fpetfeeder&sig=tLriDSbH%2FDgbXzWyftEr9Tp9zD6CtXdyArr4ZRRf%2B9c%3D&se=1752515853"
 #define MQTT_USERNAME "doggoHardware.azure-devices.net/petfeeder/?api-version=2021-04-12"
 #define DATABASE_ENDPOINT "https://petfeeder-embedded.azurewebsites.net/api/devices/status"
 

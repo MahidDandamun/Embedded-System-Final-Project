@@ -7,16 +7,12 @@
 
 // MQTT function declarations
 void setupMQTT();
-bool connectMQTT();                                                       // Add this declaration
-void handleMQTTCallback(char *topic, byte *payload, unsigned int length); // Add this declaration
+bool connectMQTT();
+void handleMQTTCallback(char *topic, byte *payload, unsigned int length);
 void sendSensorDataToAzure();
-
-// Backend communication functions
 void handleBackendCommunication();
-bool sendHTTPRequest(String path, String queryString);
-bool sendFeedingDataToPHP(String feedingType, float amount, String timestamp);
-bool sendStatusDataToPHP();
-bool sendSensorDataToPHP();
 bool checkForRemoteCommands();
+void setupTime();
+void handleDirectMethod();
 
 #endif

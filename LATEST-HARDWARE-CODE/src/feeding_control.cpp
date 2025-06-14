@@ -64,13 +64,6 @@ void recordFoodDispensing(String feedingType)
   String status = getFeedingStatus();
   strcpy(sensors.feedingStatus, status.c_str());
 
-  // Log the feeding event
-  if (feederSystem.rtcReady)
-  {
-    String timestamp = formatDateTime(rtc.now());
-    sendFeedingDataToPHP(feedingType, FOOD_PORTION_GRAMS, timestamp);
-  }
-
   Serial.println("Food dispensed: " + feedingType + " - " + String(FOOD_PORTION_GRAMS) + "g");
 }
 
