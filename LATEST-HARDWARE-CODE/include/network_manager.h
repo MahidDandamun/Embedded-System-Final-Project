@@ -13,6 +13,7 @@ void sendSensorDataToAzure();
 void handleBackendCommunication();
 bool checkForRemoteCommands();
 void setupTime();
-void handleDirectMethod();
+void handleDirectMethod(char *topic, byte *payload, unsigned int length);
+void processMQTTLoop();
 
 #endif

@@ -6,8 +6,8 @@
 #include <RTClib.h>
 
 // WiFi Configuration
-#define WIFI_SSID "Galaxy A21s53DC"
-#define WIFI_PASSWORD "24681012"
+#define WIFI_SSID "GlobeAtHome_D08BD_2.4"
+#define WIFI_PASSWORD "SkA4B8hC"
 #define WIFI_RETRY_ATTEMPTS 20
 
 // Device Configuration

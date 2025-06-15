@@ -25,6 +25,46 @@ void handleFeeding()
   Serial.println("Food dispensing started");
 }
 
+// New function for remote feeding that can override timing restrictions
+void handleRemoteFeeding()
+{
+  // Only check critical restrictions for remote feeding
+  if (feederSystem.dispensing)
+  {
+    Serial.println("Cannot dispense food - already dispensing");
+    return;
+  }
+
+  // Check daily limit
+  if (sensors.dailyFoodDispensed >= MAX_DAILY_FOOD)
+  {
+    Serial.println("Cannot dispense food - daily limit reached");
+    return;
+  }
+
+  // Check if food level is empty
+  if (strcmp(sensors.foodLevel, FOOD_LEVEL_EMPTY) == 0)
+  {
+    Serial.println("Cannot dispense food - no food available");
+    return;
+  }
+
+  // Start the feeding sequence (bypass timing restrictions for remote)
+  Serial.println("Starting REMOTE feeding sequence...");
+  myServo.write(180); // Open the servo to dispense food
+  feederSystem.dispensing = true;
+  timing.dispenseStartTime = millis();
+
+  // Record the food dispensing
+  recordFoodDispensing("Remote");
+
+  // Provide audio/visual feedback
+  buzzerBeepWithLED(BUZZER_PATTERN_SINGLE, BUZZER_MEDIUM_BEEP, 0, RGB_BLUE);
+  setRGBColor(RGB_BLUE);
+
+  Serial.println("Remote food dispensing started");
+}
+
 // This function should be called in your main loop to check if dispensing is complete
 void checkFeedingComplete()
 {
@@ -50,7 +90,7 @@ void performAutoFeed()
     myServo.write(180);
     feederSystem.dispensing = true;
     timing.dispenseStartTime = millis();
-    recordFoodDispensing("Scheduled"); // Add the required String parameter
+    recordFoodDispensing("Scheduled");
     buzzerBeepWithLED(BUZZER_PATTERN_SINGLE, BUZZER_MEDIUM_BEEP, 0, RGB_BLUE);
     setRGBColor(RGB_BLUE);
 
@@ -85,6 +125,21 @@ bool canDispenseFood()
   return true;
 }
 
+// New function that can override timing for remote commands
+bool canDispenseFoodRemote()
+{
+  // Check if daily limit reached
+  if (sensors.dailyFoodDispensed >= MAX_DAILY_FOOD)
+    return false;
+
+  // Check if food level is empty - use strcmp for char array comparison
+  if (strcmp(sensors.foodLevel, FOOD_LEVEL_EMPTY) == 0)
+    return false;
+
+  // Skip timing and bowl full checks for remote commands
+  return true;
+}
+
 void recordFoodDispensing(String feedingType)
 {
   sensors.dailyFoodDispensed += FOOD_PORTION_GRAMS;
@@ -113,6 +168,18 @@ String getFeedingStatus()
     return String("Too soon");
 
   // Use strcmp for char array comparison
+  if (strcmp(sensors.foodLevel, FOOD_LEVEL_EMPTY) == 0)
+    return String("No food");
+
+  return String("Ready to feed");
+}
+
+// New function for remote feeding status
+String getRemoteFeedingStatus()
+{
+  if (sensors.dailyFoodDispensed >= MAX_DAILY_FOOD)
+    return String("Daily limit reached");
+
   if (strcmp(sensors.foodLevel, FOOD_LEVEL_EMPTY) == 0)
     return String("No food");
 

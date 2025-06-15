@@ -82,7 +82,27 @@ bool connectMQTT()
 void handleMQTTCallback(char *topic, byte *payload, unsigned int length)
 {
   String message = String((char *)payload, length);
+  String topicStr = String(topic);
+
   Serial.printf("Message received on topic: %s\n", topic);
+  Serial.printf("Message content: %s\n", message.c_str());
+
+  // Check if this is a direct method call
+  if (topicStr.startsWith("$iothub/methods/POST/"))
+  {
+    Serial.println("Direct method detected - routing to handleDirectMethod");
+    handleDirectMethod(topic, payload, length);
+  }
+  // Check if this is a device twin update
+  else if (topicStr.startsWith("$iothub/twin/PATCH/properties/desired/"))
+  {
+    Serial.println("Device twin update received");
+    // Handle device twin updates here if needed
+  }
+  else
+  {
+    Serial.println("Unknown message type received");
+  }
 }
 
 bool sendToDatabase()
@@ -234,10 +254,23 @@ bool checkForRemoteCommands()
 void handleDirectMethod(char *topic, byte *payload, unsigned int length)
 {
   Serial.printf("Direct method received on topic: %s\n", topic);
+  Serial.printf("Payload length: %d\n", length);
+
+  // Print the payload for debugging
+  String payloadStr = "";
+  for (int i = 0; i < length; i++)
+  {
+    payloadStr += (char)payload[i];
+  }
+  Serial.println("Payload: " + payloadStr);
 
   String topicStr = String(topic);
+  Serial.println("Full topic string: " + topicStr);
+
   int methodStart = topicStr.indexOf("POST/") + 5;
   int methodEnd = topicStr.indexOf("/", methodStart);
+
+  Serial.printf("methodStart: %d, methodEnd: %d\n", methodStart, methodEnd);
 
   // Check if we found both markers
   if (methodStart > 4 && methodEnd > methodStart)
@@ -255,12 +288,23 @@ void handleDirectMethod(char *topic, byte *payload, unsigned int length)
 
     if (methodName == "runMotors")
     {
-      // Check if feeding is possible
-      if (canDispenseFood() && !feederSystem.dispensing)
+      Serial.println("Processing runMotors command...");
+
+      // Add debugging info
+      Serial.printf("Current time: %lu ms\n", millis());
+      Serial.printf("Last feeding time: %lu ms\n", timing.lastFeedingTime);
+      Serial.printf("Time since last feeding: %lu ms\n", millis() - timing.lastFeedingTime);
+      Serial.printf("Required interval: %lu ms\n", MIN_FEEDING_INTERVAL);
+      Serial.printf("Currently dispensing: %s\n", feederSystem.dispensing ? "YES" : "NO");
+      Serial.printf("Remote feeding status: %s\n", getRemoteFeedingStatus().c_str());
+
+      // Use remote feeding logic that bypasses timing restrictions
+      if (canDispenseFoodRemote() && !feederSystem.dispensing)
       {
-        // Execute the feeding sequence
-        handleFeeding();
-        Serial.println("Motors sequence executed successfully");
+        // Execute the remote feeding sequence
+        Serial.println("Starting remote feeding sequence...");
+        handleRemoteFeeding();
+        Serial.println("Remote motors sequence executed successfully");
 
         // Send success response
         responseTopic = "$iothub/methods/res/200/?$rid=" + requestId;
@@ -274,9 +318,9 @@ void handleDirectMethod(char *topic, byte *payload, unsigned int length)
         {
           reason = "Motors already running";
         }
-        else if (!canDispenseFood())
+        else if (!canDispenseFoodRemote())
         {
-          reason = getFeedingStatus(); // This will give us the specific reason
+          reason = getRemoteFeedingStatus(); // This will give us the specific reason
         }
 
         Serial.println("Cannot run motors: " + reason);
@@ -294,25 +338,63 @@ void handleDirectMethod(char *topic, byte *payload, unsigned int length)
       responsePayload = "{\"status\":\"error\",\"message\":\"Method not found\"}";
     }
 
-    // Publish the response
-    mqttClient.publish(responseTopic.c_str(), responsePayload.c_str());
-    Serial.println("Response sent: " + responsePayload);
+    // Publish the response immediately
+    Serial.println("Sending response...");
+    Serial.println("Response Topic: " + responseTopic);
+    Serial.println("Response Payload: " + responsePayload);
+
+    bool published = mqttClient.publish(responseTopic.c_str(), responsePayload.c_str());
+    if (published)
+    {
+      Serial.println("✓ Response published successfully");
+
+      // Force immediate transmission
+      mqttClient.loop();
+      delay(100); // Small delay to ensure message is sent
+      mqttClient.loop();
+    }
+    else
+    {
+      Serial.println("✗ Failed to publish response!");
+      Serial.printf("MQTT State: %d\n", mqttClient.state());
+
+      // Try to reconnect and send again
+      if (!mqttClient.connected())
+      {
+        Serial.println("MQTT disconnected, attempting reconnection...");
+        if (connectMQTT())
+        {
+          Serial.println("Reconnected, trying to send response again...");
+          mqttClient.publish(responseTopic.c_str(), responsePayload.c_str());
+          mqttClient.loop();
+        }
+      }
+    }
   }
   else
   {
     Serial.println("Could not extract method name properly");
-    Serial.print("methodStart: ");
-    Serial.println(methodStart);
-    Serial.print("methodEnd: ");
-    Serial.println(methodEnd);
+    Serial.printf("methodStart: %d, methodEnd: %d\n", methodStart, methodEnd);
 
     // Send malformed request response
     int ridStart = topicStr.indexOf("$rid=") + 5;
     String requestId = topicStr.substring(ridStart);
     String responseTopic = "$iothub/methods/res/400/?$rid=" + requestId;
     String responsePayload = "{\"status\":\"error\",\"message\":\"Malformed method request\"}";
-    mqttClient.publish(responseTopic.c_str(), responsePayload.c_str());
+
+    bool published = mqttClient.publish(responseTopic.c_str(), responsePayload.c_str());
+    if (published)
+    {
+      Serial.println("✓ Error response sent for malformed request");
+      mqttClient.loop();
+    }
+    else
+    {
+      Serial.println("✗ Failed to send error response");
+    }
   }
+
+  Serial.println("Direct method processing complete");
 }
 
 bool verifyMessageDelivery()
@@ -327,4 +409,18 @@ bool verifyMessageDelivery()
     delay(100);
   }
   return false;
+}
+
+void processMQTTLoop()
+{
+  if (mqttClient.connected())
+  {
+    mqttClient.loop();
+  }
+  else if (WiFi.status() == WL_CONNECTED)
+  {
+    // Try to reconnect if WiFi is still connected
+    Serial.println("MQTT disconnected, attempting reconnection...");
+    connectMQTT();
+  }
 }

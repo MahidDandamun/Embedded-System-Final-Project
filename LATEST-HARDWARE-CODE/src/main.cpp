@@ -50,6 +50,14 @@ void loop()
     return;
   }
 
+  // Call this more frequently (every 50ms)
+  static unsigned long lastMQTTLoop = 0;
+  if (millis() - lastMQTTLoop >= 50)
+  {
+    processMQTTLoop();
+    lastMQTTLoop = millis();
+  }
+
   unsigned long currentMillis = millis();
 
   // Print connection status every 30 seconds
