@@ -127,5 +127,19 @@ void initializeSensors()
 {
   // Initialize scale and other sensors
   scale.begin(HX711_DOUT_PIN, HX711_SCK_PIN);
-  // Add any additional sensor initialization here
+  Serial.println("Initializing Load Cell...");
+  if (!scale.is_ready())
+  {
+    Serial.println("HX711 not found.");
+  }
+  else
+  {
+    Serial.println("HX711 Ready.");
+    scale.set_scale(-600); // 🧪 Use your calibrated value here
+    delay(2000);           // Wait for load cell to stabilize
+
+    Serial.println("Taring... (make sure scale is empty)");
+    scale.tare(); // Reset the scale to 0
+    Serial.println("Tare complete. Now place a known weight.");
+  }
 }
