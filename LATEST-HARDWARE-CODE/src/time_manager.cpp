@@ -15,6 +15,14 @@ String formatTime(DateTime dt)
   return String(buffer);
 }
 
+DateTime getPhilippineTime()
+{
+  if (!feederSystem.rtcReady)
+    return DateTime(); // return default
+
+  return rtc.now() + TimeSpan(0, 8, 0, 0); // Add 8 hours
+}
+
 DateTime getNextScheduledFeedTime(DateTime currentTime)
 {
   int currentHour = currentTime.hour();

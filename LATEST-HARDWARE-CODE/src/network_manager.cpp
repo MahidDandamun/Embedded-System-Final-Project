@@ -1,4 +1,7 @@
 #include "network_manager.h"
+#include "feeding_control.h"
+#include "time_manager.h"
+#include "sensor_manager.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
@@ -97,8 +100,7 @@ bool sendToDatabase()
   https.addHeader("Accept", "application/json");
 
   StaticJsonDocument<512> doc;
-  doc["device_id"] = DEVICE_ID;
-  doc["timestamp"] = feederSystem.rtcReady ? formatDateTime(rtc.now()) : String(millis());
+  // doc["timestamp"] = feederSystem.rtcReady ? formatDateTime(getPhilippineTime()) : String(millis());
   doc["bowl_weight"] = sensors.weight;
   doc["container_level"] = String(sensors.foodLevel);
   doc["pet_status"] = feederSystem.animalDetected;
@@ -152,7 +154,7 @@ void sendSensorDataToAzure()
   JsonObject telemetry = doc.createNestedObject("telemetry");
   telemetry["messageType"] = "deviceTelemetry";
   telemetry["id"] = id;
-  telemetry["timestamp"] = feederSystem.rtcReady ? formatDateTime(rtc.now()) : String(millis());
+  telemetry["timestamp"] = feederSystem.rtcReady ? formatDateTime(getPhilippineTime()) : String(millis());
   telemetry["bowl_weight"] = sensors.weight;
   telemetry["container_level"] = String(sensors.foodLevel);
   telemetry["pet_status"] = feederSystem.animalDetected;
@@ -191,9 +193,11 @@ void sendSensorDataToAzure()
 void handleBackendCommunication()
 {
   unsigned long currentMillis = millis();
+
   if (currentMillis - timing.lastDataSync >= DATA_SYNC_INTERVAL)
   {
-    sendSensorDataToAzure();
+    handleSensors();         // ✅ Update sensor values first
+    sendSensorDataToAzure(); // ✅ Now you send up-to-date values
     checkForRemoteCommands();
     timing.lastDataSync = currentMillis;
   }
@@ -236,7 +240,34 @@ void handleDirectMethod(char *topic, byte *payload, unsigned int length)
   int methodEnd = topicStr.indexOf("/", methodStart);
   String methodName = topicStr.substring(methodStart, methodEnd);
 
-  Serial.printf("Method name: %s\n", methodName.c_str());
+  // Serial.printf("Method name: %s\n", methodName.c_str());
+
+  // Check if we found both markers
+  if (methodStart > 4 && methodEnd > methodStart)
+  {
+    String methodName = topicStr.substring(methodStart, methodEnd);
+
+    Serial.print("Method: ");
+    Serial.println(methodName);
+
+    if (methodName == "runMotors")
+    {
+      handleFeeding();
+      Serial.println("Motors sequence executed");
+    }
+    else
+    {
+      Serial.println("Unknown method");
+    }
+  }
+  else
+  {
+    Serial.println("Could not extract method name properly");
+    Serial.print("methodStart: ");
+    Serial.println(methodStart);
+    Serial.print("methodEnd: ");
+    Serial.println(methodEnd);
+  }
 
   int ridStart = topicStr.indexOf("$rid=") + 5;
   String requestId = topicStr.substring(ridStart);

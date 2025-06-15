@@ -8,5 +8,6 @@ String formatDateTime(DateTime dt);
 String formatTime(DateTime dt);
 DateTime getNextScheduledFeedTime(DateTime currentTime);
 bool shouldAutoFeed(DateTime currentTime);
+DateTime getPhilippineTime();
 
 #endif

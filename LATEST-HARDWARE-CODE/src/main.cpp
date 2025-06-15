@@ -34,6 +34,8 @@ void testDataSending()
 void setup()
 {
   systemStart();
+  pinMode(POWER_PIN, OUTPUT);
+  digitalWrite(POWER_PIN, HIGH);
 
   // Add a delay then test (optional)
   delay(5000);

@@ -6,27 +6,27 @@
 #include <RTClib.h>
 
 // WiFi Configuration
-#define WIFI_SSID "GlobeAtHome_D08BD_2.4"
-#define WIFI_PASSWORD "SkA4B8hC"
+#define WIFI_SSID "Galaxy A21s53DC"
+#define WIFI_PASSWORD "24681012"
 #define WIFI_RETRY_ATTEMPTS 20
 
 // Device Configuration
 #define DEVICE_NAME "PetFeeder_001"
 
 // Pin Definitions
-#define POWER_PIN 2
-#define BUTTON1_PIN 14
-#define BUTTON2_PIN 27
-#define ULTRASONIC_TRIG_PIN 5
-#define ULTRASONIC_ECHO_PIN 18
-#define PIR_PIN 19
-#define HX711_DOUT_PIN 16
-#define HX711_SCK_PIN 4
-#define RED_PIN 25
-#define GREEN_PIN 26
-#define BLUE_PIN 33
-#define BUZZER_PIN 32
-#define SERVO_PIN 13
+#define POWER_PIN 27
+#define BUTTON1_PIN 26
+#define BUTTON2_PIN 0
+#define ULTRASONIC_TRIG_PIN 33
+#define ULTRASONIC_ECHO_PIN 32
+#define PIR_PIN 25
+#define HX711_DOUT_PIN 5
+#define HX711_SCK_PIN 23
+#define RED_PIN 13
+#define GREEN_PIN 12
+#define BLUE_PIN 14
+#define BUZZER_PIN 15
+#define SERVO_PIN 4
 
 // LCD Configuration
 #define LCD_ADDRESS 0x27
