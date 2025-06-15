@@ -89,6 +89,9 @@ void loop()
   handleFeeding();
   handleButtons();
 
+  // Check if feeding sequence is complete
+  checkFeedingComplete();
+
   if (currentMillis - timing.lastLCDUpdate >= LCD_UPDATE_INTERVAL)
   {
     updateLCD();

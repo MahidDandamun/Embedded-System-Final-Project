@@ -8,6 +8,7 @@
 #include "time_manager.h"
 
 void handleFeeding();
+void checkFeedingComplete();
 void performAutoFeed();
 bool canDispenseFood();
 void recordFoodDispensing(String feedingType);

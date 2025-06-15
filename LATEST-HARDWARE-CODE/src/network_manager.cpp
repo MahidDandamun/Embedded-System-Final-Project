@@ -238,27 +238,65 @@ void handleDirectMethod(char *topic, byte *payload, unsigned int length)
   String topicStr = String(topic);
   int methodStart = topicStr.indexOf("POST/") + 5;
   int methodEnd = topicStr.indexOf("/", methodStart);
-  String methodName = topicStr.substring(methodStart, methodEnd);
-
-  // Serial.printf("Method name: %s\n", methodName.c_str());
 
   // Check if we found both markers
   if (methodStart > 4 && methodEnd > methodStart)
   {
     String methodName = topicStr.substring(methodStart, methodEnd);
-
     Serial.print("Method: ");
     Serial.println(methodName);
 
+    // Extract request ID for response
+    int ridStart = topicStr.indexOf("$rid=") + 5;
+    String requestId = topicStr.substring(ridStart);
+
+    String responseTopic;
+    String responsePayload;
+
     if (methodName == "runMotors")
     {
-      handleFeeding();
-      Serial.println("Motors sequence executed");
+      // Check if feeding is possible
+      if (canDispenseFood() && !feederSystem.dispensing)
+      {
+        // Execute the feeding sequence
+        handleFeeding();
+        Serial.println("Motors sequence executed successfully");
+
+        // Send success response
+        responseTopic = "$iothub/methods/res/200/?$rid=" + requestId;
+        responsePayload = "{\"status\":\"success\",\"message\":\"Motors started successfully\",\"dispensing\":true}";
+      }
+      else
+      {
+        // Cannot dispense food - send appropriate error
+        String reason = "";
+        if (feederSystem.dispensing)
+        {
+          reason = "Motors already running";
+        }
+        else if (!canDispenseFood())
+        {
+          reason = getFeedingStatus(); // This will give us the specific reason
+        }
+
+        Serial.println("Cannot run motors: " + reason);
+
+        // Send error response with specific reason
+        responseTopic = "$iothub/methods/res/400/?$rid=" + requestId;
+        responsePayload = "{\"status\":\"error\",\"message\":\"Cannot run motors\",\"reason\":\"" + reason + "\"}";
+      }
     }
     else
     {
-      Serial.println("Unknown method");
+      Serial.println("Unknown method: " + methodName);
+      // Send method not found response
+      responseTopic = "$iothub/methods/res/404/?$rid=" + requestId;
+      responsePayload = "{\"status\":\"error\",\"message\":\"Method not found\"}";
     }
+
+    // Publish the response
+    mqttClient.publish(responseTopic.c_str(), responsePayload.c_str());
+    Serial.println("Response sent: " + responsePayload);
   }
   else
   {
@@ -267,15 +305,14 @@ void handleDirectMethod(char *topic, byte *payload, unsigned int length)
     Serial.println(methodStart);
     Serial.print("methodEnd: ");
     Serial.println(methodEnd);
+
+    // Send malformed request response
+    int ridStart = topicStr.indexOf("$rid=") + 5;
+    String requestId = topicStr.substring(ridStart);
+    String responseTopic = "$iothub/methods/res/400/?$rid=" + requestId;
+    String responsePayload = "{\"status\":\"error\",\"message\":\"Malformed method request\"}";
+    mqttClient.publish(responseTopic.c_str(), responsePayload.c_str());
   }
-
-  int ridStart = topicStr.indexOf("$rid=") + 5;
-  String requestId = topicStr.substring(ridStart);
-
-  String responseTopic = "$iothub/methods/res/200/?$rid=" + requestId;
-  String responsePayload = "{\"status\":\"Method received but not implemented\"}";
-
-  mqttClient.publish(responseTopic.c_str(), responsePayload.c_str());
 }
 
 bool verifyMessageDelivery()

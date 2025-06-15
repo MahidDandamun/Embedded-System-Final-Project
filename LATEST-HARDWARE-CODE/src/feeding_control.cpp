@@ -2,13 +2,44 @@
 
 void handleFeeding()
 {
+  // Check if we can dispense food
+  if (!canDispenseFood() || feederSystem.dispensing)
+  {
+    Serial.println("Cannot dispense food at this time");
+    return;
+  }
+
+  // Start the feeding sequence
+  Serial.println("Starting feeding sequence...");
+  myServo.write(180); // Open the servo to dispense food
+  feederSystem.dispensing = true;
+  timing.dispenseStartTime = millis();
+
+  // Record the food dispensing
+  recordFoodDispensing("Manual/Remote");
+
+  // Provide audio/visual feedback
+  buzzerBeepWithLED(BUZZER_PATTERN_SINGLE, BUZZER_MEDIUM_BEEP, 0, RGB_BLUE);
+  setRGBColor(RGB_BLUE);
+
+  Serial.println("Food dispensing started");
+}
+
+// This function should be called in your main loop to check if dispensing is complete
+void checkFeedingComplete()
+{
   unsigned long currentMillis = millis();
   if (feederSystem.dispensing && currentMillis - timing.dispenseStartTime >= DISPENSE_TIME)
   {
-    myServo.write(0);
+    // Stop dispensing
+    myServo.write(0); // Close the servo
     feederSystem.dispensing = false;
+
+    // Provide completion feedback
     buzzerBeepWithLED(BUZZER_PATTERN_WARNING, BUZZER_MEDIUM_BEEP, BUZZER_MEDIUM_PAUSE, RGB_PURPLE);
     setRGBColor(sensors.foodLevel);
+
+    Serial.println("Food dispensing completed");
   }
 }
 
