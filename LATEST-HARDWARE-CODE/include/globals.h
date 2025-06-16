@@ -7,6 +7,7 @@
 #include <HX711.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <PubSubClient.h>
 #include "config.h" // This now includes Arduino.h and RTClib.h
 
 // Global object declarations
@@ -24,5 +25,6 @@ extern SensorData sensors;
 extern Timing timing;
 extern TimeData timeData;
 extern IoTHubConfig iotHub;
+extern PubSubClient mqttClient;
 
 #endif

@@ -79,3 +79,33 @@ String getBowlStatus(float currentWeight)
 
   return String(BOWL_STATUS_PARTIAL);
 }
+
+void updateLoadCellReading()
+{
+  if (scale.is_ready())
+  {
+    float weight = scale.get_units(10); // average over 10 readings
+    sensors.weight = weight;
+    Serial.printf("Load Cell Weight: %.2f grams\n", weight);
+
+    // Optional: Set bowl status based on weight
+    if (weight < 10.0)
+    {
+      strcpy(sensors.bowlStatus, "Empty");
+    }
+    else if (weight < 50.0)
+    {
+      strcpy(sensors.bowlStatus, "Low");
+    }
+    else
+    {
+      strcpy(sensors.bowlStatus, "OK");
+    }
+  }
+  else
+  {
+    Serial.println("HX711 not ready.");
+    sensors.weight = -1;
+    strcpy(sensors.bowlStatus, "Error");
+  }
+}

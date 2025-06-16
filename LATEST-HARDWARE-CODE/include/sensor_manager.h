@@ -8,5 +8,6 @@ void handleSensors();
 float readUltrasonicDistance();
 String getFoodLevel(float distanceInches);
 String getBowlStatus(float currentWeight);
+void updateLoadCellReading();
 
 #endif

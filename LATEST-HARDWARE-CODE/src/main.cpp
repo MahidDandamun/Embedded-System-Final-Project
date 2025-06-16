@@ -28,15 +28,14 @@ void testDataSending()
   // Test Azure IoT Hub
   sendSensorDataToAzure();
 
-  // Test PHP backend
-  sendStatusDataToPHP();
-
   Serial.println("=== End of manual test ===\n");
 }
 
 void setup()
 {
   systemStart();
+  pinMode(POWER_PIN, OUTPUT);
+  digitalWrite(POWER_PIN, HIGH);
 
   // Add a delay then test (optional)
   delay(5000);
@@ -49,6 +48,14 @@ void loop()
   {
     delay(100);
     return;
+  }
+
+  // Call this more frequently (every 50ms)
+  static unsigned long lastMQTTLoop = 0;
+  if (millis() - lastMQTTLoop >= 50)
+  {
+    processMQTTLoop();
+    lastMQTTLoop = millis();
   }
 
   unsigned long currentMillis = millis();
@@ -89,6 +96,9 @@ void loop()
   handleSensors();
   handleFeeding();
   handleButtons();
+
+  // Check if feeding sequence is complete
+  checkFeedingComplete();
 
   if (currentMillis - timing.lastLCDUpdate >= LCD_UPDATE_INTERVAL)
   {
