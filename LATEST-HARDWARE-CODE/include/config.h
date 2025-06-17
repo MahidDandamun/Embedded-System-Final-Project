@@ -3,7 +3,8 @@
 
 // Include necessary headers for types used in structs
 #include <Arduino.h>
-#include <RTClib.h>
+#include <ThreeWire.h>
+#include <RtcDS1302.h>
 
 // WiFi Configuration
 #define WIFI_SSID "HG8145V5_779FD"
@@ -17,8 +18,8 @@
 #define POWER_PIN 27
 #define BUTTON1_PIN 15
 #define BUTTON2_PIN 0
-#define ULTRASONIC_ECHO_PIN 32
-#define ULTRASONIC_TRIG_PIN 33
+#define ULTRASONIC_ECHO_PIN 33
+#define ULTRASONIC_TRIG_PIN 32
 #define PIR_PIN 25
 #define HX711_DOUT_PIN 5
 #define HX711_SCK_PIN 23
@@ -28,16 +29,21 @@
 #define BUZZER_PIN 26
 #define SERVO_PIN 4
 
+// DS1302 RTC Module Pins
+#define RTC_IO 16
+#define RTC_SCLK 17
+#define RTC_CE 2
+
 // LCD Configuration
 #define LCD_ADDRESS 0x27
 #define LCD_COLUMNS 16
 #define LCD_ROWS 2
 
 // Timing Intervals (in milliseconds)
-#define ULTRASONIC_READ_INTERVAL 1000
+#define ULTRASONIC_READ_INTERVAL 200
 #define WEIGHT_READ_INTERVAL 500
 #define RTC_READ_INTERVAL 5000
-#define LCD_UPDATE_INTERVAL 1000
+#define LCD_UPDATE_INTERVAL 400
 #define DATA_SYNC_INTERVAL 30000
 #define DISPENSE_TIME 2000
 #define MIN_FEEDING_INTERVAL 300000 // 5 minutes
@@ -45,8 +51,9 @@
 #define DEBOUNCE_DELAY 50
 
 // Sensor Thresholds
-#define FOOD_FULL_DISTANCE 2.0    // inches
-#define FOOD_HALF_DISTANCE 4.0    // inches
+#define FOOD_FULL_DISTANCE 9.0    // cm
+#define FOOD_HALF_DISTANCE 13.5   // cm
+#define FOOD_EMPTY_DISTANCE 18.0  // cm
 #define EMPTY_BOWL_THRESHOLD 10.0 // grams
 #define FULL_BOWL_THRESHOLD 200.0 // grams
 #define SCALE_READINGS 10
@@ -130,6 +137,7 @@ struct ButtonState
   bool button2 = false;
   bool lastButton1 = false;
   bool lastButton2 = false;
+  bool manualFeedInProgress = false; // Add this field for manual feeding tracking
 };
 
 struct SensorData
@@ -175,8 +183,8 @@ struct TimeData
 {
   char currentTimeString[20];  // Use char array instead of String
   char nextFeedTimeString[20]; // Use char array instead of String
-  DateTime lastAutoFeedTime;
-  DateTime nextScheduledFeed;
+  RtcDateTime lastAutoFeedTime;
+  RtcDateTime nextScheduledFeed;
 
   // Constructor
   TimeData()

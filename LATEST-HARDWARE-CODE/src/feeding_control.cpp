@@ -1,28 +1,18 @@
 #include "feeding_control.h"
-
+#include "globals.h"
 void handleFeeding()
 {
-  // Check if we can dispense food
-  if (!canDispenseFood() || feederSystem.dispensing)
+  // IMPORTANT: Only handle auto-feeding here
+  // Manual feeding is handled directly in button_handler.cpp
+
+  // Exit immediately if already dispensing to prevent multiple triggers
+  if (feederSystem.dispensing)
   {
-    Serial.println("Cannot dispense food at this time");
     return;
   }
 
-  // Start the feeding sequence
-  Serial.println("Starting feeding sequence...");
-  myServo.write(90); // Open the servo to dispense food
-  feederSystem.dispensing = true;
-  timing.dispenseStartTime = millis();
-
-  // Record the food dispensing
-  recordFoodDispensing("Manual/Remote");
-
-  // Provide audio/visual feedback
-  buzzerBeepWithLED(BUZZER_PATTERN_SINGLE, BUZZER_MEDIUM_BEEP, 0, RGB_BLUE);
-  setRGBColor(RGB_BLUE);
-
-  Serial.println("Food dispensing started");
+  // Skip auto-feeding logic - only triggered by auto-feed or remote commands
+  // Don't start dispensing automatically from this function
 }
 
 // New function for remote feeding that can override timing restrictions
@@ -35,13 +25,6 @@ void handleRemoteFeeding()
     return;
   }
 
-  // Check daily limit
-  if (sensors.dailyFoodDispensed >= MAX_DAILY_FOOD)
-  {
-    Serial.println("Cannot dispense food - daily limit reached");
-    return;
-  }
-
   // Check if food level is empty
   if (strcmp(sensors.foodLevel, FOOD_LEVEL_EMPTY) == 0)
   {
@@ -51,7 +34,7 @@ void handleRemoteFeeding()
 
   // Start the feeding sequence (bypass timing restrictions for remote)
   Serial.println("Starting REMOTE feeding sequence...");
-  myServo.write(90); // Open the servo to dispense food
+  myServo.write(45); // Move to dispense position
   feederSystem.dispensing = true;
   timing.dispenseStartTime = millis();
 
@@ -69,68 +52,99 @@ void handleRemoteFeeding()
 void checkFeedingComplete()
 {
   unsigned long currentMillis = millis();
-  if (feederSystem.dispensing && currentMillis - timing.dispenseStartTime >= DISPENSE_TIME)
+
+  // This function is only for automatic timeout of dispensing
+  // Manual feeding handles its own completion
+  if (feederSystem.dispensing &&
+      !buttons.manualFeedInProgress && // Don't interfere with manual feeding
+      currentMillis - timing.dispenseStartTime >= DISPENSE_TIME)
   {
     // Stop dispensing
-    myServo.write(0); // Close the servo
+    myServo.write(90); // Return to rest position
     feederSystem.dispensing = false;
 
     // Provide completion feedback
     buzzerBeepWithLED(BUZZER_PATTERN_WARNING, BUZZER_MEDIUM_BEEP, BUZZER_MEDIUM_PAUSE, RGB_PURPLE);
     setRGBColor(sensors.foodLevel);
 
-    Serial.println("Food dispensing completed");
+    Serial.println("Automatic feeding cycle completed (timed)");
   }
 }
 
 void performAutoFeed()
 {
-  if (canDispenseFood() && !feederSystem.dispensing)
+  // Only proceed if not already dispensing
+  if (feederSystem.dispensing)
   {
-    myServo.write(90);
-    feederSystem.dispensing = true;
-    timing.dispenseStartTime = millis();
-    recordFoodDispensing("Scheduled");
-    buzzerBeepWithLED(BUZZER_PATTERN_SINGLE, BUZZER_MEDIUM_BEEP, 0, RGB_BLUE);
-    setRGBColor(RGB_BLUE);
-
-    // Update last auto feed time
-    if (feederSystem.rtcReady)
-    {
-      timeData.lastAutoFeedTime = rtc.now();
-    }
+    Serial.println("Cannot auto-feed - already dispensing");
+    return;
   }
+
+  Serial.println("=== AUTO FEED SEQUENCE STARTING ===");
+
+  // Set dispensing flag immediately
+  feederSystem.dispensing = true;
+  timing.dispenseStartTime = millis();
+
+  // Display on LCD
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Auto Feeding");
+
+  // Use the same dispensing pattern
+  myServo.write(45); // Move to dispense position
+
+  // Record and provide feedback
+  recordFoodDispensing("Scheduled");
+  buzzerBeepWithLED(BUZZER_PATTERN_SINGLE, BUZZER_MEDIUM_BEEP, 0, RGB_BLUE);
+  setRGBColor(RGB_BLUE);
+
+  // Update last auto feed time
+  if (feederSystem.rtcReady)
+  {
+    timeData.lastAutoFeedTime = rtc.GetDateTime();
+  }
+
+  Serial.println("Auto feeding started");
 }
 
 bool canDispenseFood()
 {
   unsigned long currentMillis = millis();
 
-  // Check if daily limit reached
-  if (sensors.dailyFoodDispensed >= MAX_DAILY_FOOD)
-    return false;
-
-  // Check if bowl is full - use strcmp for char array comparison
-  if (feederSystem.bowlFull || strcmp(sensors.bowlStatus, BOWL_STATUS_FULL) == 0)
-    return false;
-
-  // Check minimum interval between feedings
-  if (currentMillis - timing.lastFeedingTime < MIN_FEEDING_INTERVAL)
+  // Check minimum interval between feedings - reduced to 5 seconds for auto-feeding
+  if (currentMillis - timing.lastFeedingTime < 5000) // 5 seconds
     return false;
 
   // Check if food level is empty - use strcmp for char array comparison
   if (strcmp(sensors.foodLevel, FOOD_LEVEL_EMPTY) == 0)
     return false;
 
+  // REMOVED: Bowl full check and daily limit for manual feeding
+  return true;
+}
+
+// New function specifically for manual feeding - always allow if not empty
+bool canManualDispense()
+{
+  // Only check if food is available and not currently dispensing
+  if (feederSystem.dispensing)
+    return false;
+
+  // Check if food level is empty
+  if (strcmp(sensors.foodLevel, FOOD_LEVEL_EMPTY) == 0)
+    return false;
+
+  // Allow manual dispensing regardless of bowl status, timing, or daily limits
   return true;
 }
 
 // New function that can override timing for remote commands
 bool canDispenseFoodRemote()
 {
-  // Check if daily limit reached
-  if (sensors.dailyFoodDispensed >= MAX_DAILY_FOOD)
-    return false;
+  // DISABLED: Daily limit check
+  // if (sensors.dailyFoodDispensed >= MAX_DAILY_FOOD)
+  //   return false;
 
   // Check if food level is empty - use strcmp for char array comparison
   if (strcmp(sensors.foodLevel, FOOD_LEVEL_EMPTY) == 0)
@@ -142,7 +156,8 @@ bool canDispenseFoodRemote()
 
 void recordFoodDispensing(String feedingType)
 {
-  sensors.dailyFoodDispensed += FOOD_PORTION_GRAMS;
+  // DISABLED: Daily food tracking
+  // sensors.dailyFoodDispensed += FOOD_PORTION_GRAMS;
   sensors.totalFoodDispensed += FOOD_PORTION_GRAMS;
   timing.lastFeedingTime = millis();
 
@@ -157,14 +172,15 @@ String getFeedingStatus()
 {
   unsigned long currentMillis = millis();
 
-  if (sensors.dailyFoodDispensed >= MAX_DAILY_FOOD)
-    return String("Daily limit reached");
+  // DISABLED: Daily limit check
+  // if (sensors.dailyFoodDispensed >= MAX_DAILY_FOOD)
+  //   return String("Daily limit reached");
 
-  // Use strcmp for char array comparison
-  if (feederSystem.bowlFull || strcmp(sensors.bowlStatus, BOWL_STATUS_FULL) == 0)
-    return String("Bowl full");
+  // DISABLED: Bowl full check
+  // if (feederSystem.bowlFull || strcmp(sensors.bowlStatus, BOWL_STATUS_FULL) == 0)
+  //   return String("Bowl full");
 
-  if (currentMillis - timing.lastFeedingTime < MIN_FEEDING_INTERVAL)
+  if (currentMillis - timing.lastFeedingTime < 5000) // 5 seconds
     return String("Too soon");
 
   // Use strcmp for char array comparison
@@ -177,8 +193,9 @@ String getFeedingStatus()
 // New function for remote feeding status
 String getRemoteFeedingStatus()
 {
-  if (sensors.dailyFoodDispensed >= MAX_DAILY_FOOD)
-    return String("Daily limit reached");
+  // DISABLED: Daily limit check
+  // if (sensors.dailyFoodDispensed >= MAX_DAILY_FOOD)
+  //   return String("Daily limit reached");
 
   if (strcmp(sensors.foodLevel, FOOD_LEVEL_EMPTY) == 0)
     return String("No food");
@@ -190,13 +207,14 @@ void resetDailyCounters()
 {
   if (feederSystem.rtcReady)
   {
-    DateTime now = rtc.now();
+    RtcDateTime now = rtc.GetDateTime();
     static int lastDay = -1;
 
-    if (lastDay != now.day())
+    if (lastDay != now.Day())
     {
-      sensors.dailyFoodDispensed = 0.0;
-      lastDay = now.day();
+      // DISABLED: Daily counter reset
+      // sensors.dailyFoodDispensed = 0.0;
+      lastDay = now.Day();
     }
   }
 }

@@ -2,44 +2,72 @@
 
 void updateLCD()
 {
-  if (WiFi.status() == WL_CONNECTED && !feederSystem.dispensing)
+  // First line: Time and connection status
+  lcd.setCursor(0, 0);
+  if (feederSystem.rtcReady && !feederSystem.dispensing)
   {
-    lcd.setCursor(0, 0);
+    lcd.print(formatTime(rtc.GetDateTime()));
+    lcd.print(feederSystem.backendConnected ? " *" : " X");
+    lcd.print(" ");
+
+    // Display food level on first line
+    if (strcmp(sensors.foodLevel, FOOD_LEVEL_FULL) == 0)
+    {
+      lcd.print("FULL ");
+    }
+    else if (strcmp(sensors.foodLevel, FOOD_LEVEL_HALF) == 0)
+    {
+      lcd.print("HALF ");
+    }
+    else
+    {
+      lcd.print("EMPTY");
+    }
+  }
+  else if (feederSystem.dispensing)
+  {
+    lcd.print("Dispensing...   ");
+  }
+  else
+  {
+    lcd.print("Pet Feeder Ready");
+  }
+
+  // Second line: Bowl weight and next feeding time
+  lcd.setCursor(0, 1);
+  if (feederSystem.refillMode)
+  {
+    lcd.print("REFILLING...    ");
+  }
+  else if (feederSystem.dispensing)
+  {
+    lcd.print("Please wait...  ");
+  }
+  else
+  {
+    // Display bowl weight and next feeding time
+    char statusLine[17]; // 16 chars + null terminator
+
+    // Format bowl weight with 1 decimal place
+    char weightStr[8];
+    dtostrf(sensors.weight, 4, 1, weightStr);
+
     if (feederSystem.rtcReady)
     {
-      lcd.print(formatTime(rtc.now()));
-      lcd.print(feederSystem.backendConnected ? " *" : " X");
-      lcd.print("   ");
+      // Extract only HH:MM from next feed time
+      char nextFeedTime[6];
+      strncpy(nextFeedTime, timeData.nextFeedTimeString, 5);
+      nextFeedTime[5] = '\0';
+
+      snprintf(statusLine, sizeof(statusLine), "%sg Next:%s",
+               weightStr, nextFeedTime);
     }
     else
     {
-      lcd.print("Pet Feeder Ready");
+      snprintf(statusLine, sizeof(statusLine), "Bowl:%sg      ", weightStr);
     }
 
-    lcd.setCursor(0, 1);
-    if (feederSystem.refillMode)
-    {
-      lcd.print("REFILLING...    ");
-    }
-    else
-    {
-      // Build status line using char array operations
-      char statusLine[50];
-      strcpy(statusLine, "Food:");
-      strcat(statusLine, sensors.foodLevel);
-
-      if (feederSystem.rtcReady)
-      {
-        strcat(statusLine, " Next:");
-        // Extract first 5 characters from nextFeedTimeString
-        char timeSubstring[6];
-        strncpy(timeSubstring, timeData.nextFeedTimeString, 5);
-        timeSubstring[5] = '\0'; // Null terminate
-        strcat(statusLine, timeSubstring);
-      }
-      strcat(statusLine, "      "); // Add padding spaces
-      lcd.print(statusLine);
-    }
+    lcd.print(statusLine);
   }
 }
 

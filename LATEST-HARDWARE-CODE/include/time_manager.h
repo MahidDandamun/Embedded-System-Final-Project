@@ -4,10 +4,10 @@
 #include "config.h"
 #include "globals.h"
 
-String formatDateTime(DateTime dt);
-String formatTime(DateTime dt);
-DateTime getNextScheduledFeedTime(DateTime currentTime);
-bool shouldAutoFeed(DateTime currentTime);
-DateTime getPhilippineTime();
+String formatTime(const RtcDateTime &dt);
+String formatDateTime(const RtcDateTime &dt);
+RtcDateTime getPhilippineTime();
+RtcDateTime getNextScheduledFeedTime(const RtcDateTime &currentTime);
+bool shouldAutoFeed(const RtcDateTime &currentTime);
 
 #endif

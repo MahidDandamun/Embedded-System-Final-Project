@@ -53,20 +53,31 @@ float readUltrasonicDistance()
 
   long duration = pulseIn(ULTRASONIC_ECHO_PIN, HIGH);
   float distanceCm = duration * 0.034 / 2;
-  float distanceInches = distanceCm / 2.54;
 
-  return distanceInches;
+  // Return directly in cm to avoid unit confusion
+  return distanceCm;
 }
 
-String getFoodLevel(float distanceInches)
+String getFoodLevel(float distanceCm)
 {
-  if (distanceInches <= FOOD_FULL_DISTANCE)
+  // Use constants from config.h and implement the exact logic requested
+  if (distanceCm <= FOOD_FULL_DISTANCE) // ≤ 9cm
+  {
     return String(FOOD_LEVEL_FULL);
-
-  if (distanceInches <= FOOD_HALF_DISTANCE)
+  }
+  else if (distanceCm <= FOOD_HALF_DISTANCE) // > 9cm and ≤ 13.5cm
+  {
     return String(FOOD_LEVEL_HALF);
-
-  return String(FOOD_LEVEL_EMPTY);
+  }
+  else if (distanceCm > FOOD_EMPTY_DISTANCE) // > 18cm
+  {
+    return String(FOOD_LEVEL_EMPTY);
+  }
+  else // Between 13.5cm and 18cm - indeterminate zone
+  {
+    // In the indeterminate zone, consider it low but not empty
+    return String(FOOD_LEVEL_HALF); // Default to HALF for this range
+  }
 }
 
 String getBowlStatus(float currentWeight)

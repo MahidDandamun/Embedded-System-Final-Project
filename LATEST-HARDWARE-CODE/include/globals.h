@@ -8,11 +8,14 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
+#include <ThreeWire.h>
+#include <RtcDS1302.h>
 #include "config.h" // This now includes Arduino.h and RTClib.h
 
 // Global object declarations
 extern LiquidCrystal_I2C lcd;
-extern RTC_DS3231 rtc;
+extern ThreeWire myWire;
+extern RtcDS1302<ThreeWire> rtc;
 extern Servo myServo;
 extern HX711 scale;
 

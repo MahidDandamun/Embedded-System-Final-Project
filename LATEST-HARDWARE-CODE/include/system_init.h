@@ -3,10 +3,12 @@
 
 #include "config.h"
 #include "globals.h"
-#include "time_manager.h" // Add this line for time functions
+#include "button_handler.h" // Add this line for button functions
+#include "time_manager.h"   // Add this line for time functions
 
 void systemStart();
 void initializeLCD();
+void initButtons();
 void initializeRTC();
 void initializePins();
 void initializeWiFi();

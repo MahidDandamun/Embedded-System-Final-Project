@@ -122,15 +122,32 @@ bool sendToDatabase()
   Serial.println("Testing database connection...");
 
   HTTPClient https;
+  https.setTimeout(5000); // Reduced to 5 second timeout
   https.begin("https://petfeeder-embedded.azurewebsites.net/api/devices/status");
 
   https.addHeader("Content-Type", "application/json");
   https.addHeader("Accept", "application/json");
 
-  StaticJsonDocument<512> doc;
-  doc["bowl_weight"] = sensors.weight;
-  doc["container_level"] = String(sensors.foodLevel);
-  doc["pet_status"] = feederSystem.animalDetected;
+  // Fix payload format - use simpler structure to avoid 400 error
+  StaticJsonDocument<256> doc;
+  doc["deviceId"] = String(DEVICE_ID);
+
+  // Use simpler timestamp format
+  if (feederSystem.rtcReady)
+  {
+    RtcDateTime now = getPhilippineTime();
+    doc["timestamp"] = formatDateTime(now);
+  }
+  else
+  {
+    doc["timestamp"] = String(millis());
+  }
+
+  // Ensure numeric values are properly formatted
+  doc["bowlWeight"] = (float)sensors.weight;
+  doc["containerLevel"] = (int)sensors.foodLevel;
+  doc["petPresent"] = (bool)feederSystem.animalDetected;
+  doc["status"] = "online";
 
   String jsonStr;
   serializeJson(doc, jsonStr);
@@ -161,6 +178,8 @@ bool sendToDatabase()
       lcd.setCursor(0, 1);
       lcd.print("Code: " + String(httpCode));
       Serial.printf("✗ Database error with code: %d\n", httpCode);
+      Serial.println("Response body: " + response);
+      feederSystem.backendConnected = false;
     }
   }
   else
@@ -169,6 +188,7 @@ bool sendToDatabase()
     lcd.print("Database: FAIL");
     lcd.setCursor(0, 1);
     lcd.print("Network Error");
+    feederSystem.backendConnected = false;
   }
 
   https.end();
@@ -191,28 +211,20 @@ void sendSensorDataToAzure()
     }
   }
 
-  StaticJsonDocument<1024> doc;
+  StaticJsonDocument<512> doc; // Reduced size
 
-  char id[37];
-  snprintf(id, sizeof(id), "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
-           random(0, 0xffff), random(0, 0xffff), random(0, 0xffff),
-           random(0, 0xffff), random(0, 0xffff), random(0, 0xffff),
-           random(0, 0xffff), random(0, 0xffff));
+  // Simplified payload structure
+  doc["deviceId"] = String(DEVICE_ID);
+  doc["timestamp"] = feederSystem.rtcReady ? formatDateTime(getPhilippineTime()) : String(millis());
+  doc["bowlWeight"] = (float)sensors.weight;
+  doc["containerLevel"] = (int)sensors.foodLevel;
+  doc["petPresent"] = (bool)feederSystem.animalDetected;
+  doc["messageType"] = "telemetry";
 
-  JsonObject telemetry = doc.createNestedObject("telemetry");
-  telemetry["messageType"] = "deviceTelemetry";
-  telemetry["id"] = id;
-  telemetry["timestamp"] = feederSystem.rtcReady ? formatDateTime(getPhilippineTime()) : String(millis());
-  telemetry["bowl_weight"] = sensors.weight;
-  telemetry["container_level"] = String(sensors.foodLevel);
-  telemetry["pet_status"] = feederSystem.animalDetected;
-
-  doc["properties"] = "iothub-content-type=application/json";
-
-  char payload[1024];
+  char payload[512];
   size_t len = serializeJson(doc, payload, sizeof(payload));
 
-  String topic = String("devices/") + DEVICE_ID + "/messages/events/$.ct=application%2Fjson&$.ce=utf-8";
+  String topic = String("devices/") + DEVICE_ID + "/messages/events/";
 
   Serial.println("JSON Payload:");
   serializeJsonPretty(doc, Serial);
@@ -224,9 +236,6 @@ void sendSensorDataToAzure()
     Serial.println("✓ Data sent to Azure IoT Hub successfully");
     feederSystem.mqttConnected = true;
     feederSystem.backendConnected = true;
-
-    // Send data to backend database
-    sendToDatabase();
   }
   else
   {

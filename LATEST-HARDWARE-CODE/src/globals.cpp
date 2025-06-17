@@ -2,7 +2,8 @@
 
 // Global object definitions
 LiquidCrystal_I2C lcd(LCD_ADDRESS, LCD_COLUMNS, LCD_ROWS);
-RTC_DS3231 rtc;
+ThreeWire myWire(RTC_IO, RTC_SCLK, RTC_CE);
+RtcDS1302<ThreeWire> rtc(myWire);
 Servo myServo;
 HX711 scale;
 
