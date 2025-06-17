@@ -1,6 +1,12 @@
 #include "system_init.h"
 #include "network_manager.h" // Add this include for setupMQTT()
 
+void initializeLCD();
+void initializeRTC();
+void initializePins();
+void initializeWiFi();
+void initializeSensors();
+
 void systemStart()
 {
   Serial.begin(115200);
@@ -8,9 +14,9 @@ void systemStart()
 
   Serial.println("\n=== System Starting ===");
 
+  initializePins();
   initializeLCD();
   initializeRTC();
-  initializePins();
   initializeWiFi();
   initializeSensors();
 
@@ -26,19 +32,25 @@ void systemStart()
 
 void initializeLCD()
 {
+  Serial.println("Initializing LCD...");
   lcd.init();
   lcd.backlight();
   lcd.setCursor(0, 0);
   lcd.print("Initializing...");
+  Serial.println("✓ LCD initialized successfully");
 }
 
 void initializeRTC()
 {
+  Serial.println("Initializing RTC...");
   if (rtc.begin())
   {
     feederSystem.rtcReady = true;
     if (rtc.lostPower())
+    {
+      Serial.println("RTC lost power, setting time...");
       rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    }
 
     DateTime now = rtc.now();
     timeData.lastAutoFeedTime = now;
@@ -53,6 +65,8 @@ void initializeRTC()
 
     lcd.setCursor(0, 1);
     lcd.print("RTC: OK");
+    Serial.println("✓ RTC initialized successfully");
+    Serial.printf("Current time: %s\n", currentTimeStr.c_str());
   }
   else
   {
@@ -60,12 +74,14 @@ void initializeRTC()
     feederSystem.autoFeedingEnabled = false;
     lcd.setCursor(0, 1);
     lcd.print("RTC: FAILED");
+    Serial.println("✗ RTC initialization failed!");
   }
   delay(1000);
 }
 
 void initializePins()
 {
+  Serial.println("Initializing GPIO pins...");
   pinMode(POWER_PIN, OUTPUT);
   digitalWrite(POWER_PIN, HIGH);
   feederSystem.powerOn = true;
@@ -84,19 +100,24 @@ void initializePins()
 
   myServo.attach(SERVO_PIN);
   myServo.write(0);
+  Serial.println("✓ GPIO pins initialized successfully");
 }
 
 void initializeWiFi()
 {
+  Serial.println("Starting WiFi connection...");
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Connecting WiFi");
+
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.printf("Connecting to WiFi: %s\n", WIFI_SSID);
 
   int attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < WIFI_RETRY_ATTEMPTS)
   {
     delay(500);
+    Serial.print(".");
     lcd.setCursor(attempts % LCD_COLUMNS, 1);
     lcd.print(".");
     attempts++;
@@ -110,36 +131,104 @@ void initializeWiFi()
     lcd.setCursor(0, 1);
     lcd.print(WiFi.localIP());
 
+    Serial.println("\n✓ WiFi connected successfully!");
+    Serial.printf("IP Address: %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("RSSI: %d dBm\n", WiFi.RSSI());
+    delay(2000); // Show IP for 2 seconds
+
+    // Show connecting to services
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Connecting to");
+    lcd.setCursor(0, 1);
+    lcd.print("Azure IoT Hub...");
+    Serial.println("Connecting to Azure IoT Hub...");
+
     // Initialize MQTT after WiFi connects
     setupMQTT();
 
-    delay(3000);
+    // Show MQTT connection status
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    if (feederSystem.mqttConnected)
+    {
+      lcd.print("Azure IoT: OK");
+      Serial.println("✓ Azure IoT Hub connected successfully");
+    }
+    else
+    {
+      lcd.print("Azure IoT: FAIL");
+      Serial.println("✗ Azure IoT Hub connection failed");
+    }
+    lcd.setCursor(0, 1);
+    lcd.print("Connecting DB...");
+    Serial.println("Testing database connection...");
+    delay(1500);
   }
   else
   {
     lcd.print("WiFi Failed");
     lcd.setCursor(0, 1);
     lcd.print("Check Settings");
+    Serial.println("\n✗ WiFi connection failed!");
+    Serial.println("Please check WiFi credentials and signal strength");
+    delay(3000);
   }
 }
 
 void initializeSensors()
 {
+  Serial.println("Initializing sensors...");
+  // Show sensor initialization status
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Init Sensors...");
+
   // Initialize scale and other sensors
   scale.begin(HX711_DOUT_PIN, HX711_SCK_PIN);
   Serial.println("Initializing Load Cell...");
+
+  lcd.setCursor(0, 1);
   if (!scale.is_ready())
   {
-    Serial.println("HX711 not found.");
+    Serial.println("✗ HX711 not found.");
+    lcd.print("Scale: FAIL");
   }
   else
   {
-    Serial.println("HX711 Ready.");
-    scale.set_scale(-600); // 🧪 Use your calibrated value here
-    delay(2000);           // Wait for load cell to stabilize
+    Serial.println("✓ HX711 Ready.");
+    lcd.print("Scale: OK");
+    scale.set_scale(48400); // Use your calibrated value here
+    delay(1000);            // Wait for load cell to stabilize
 
-    Serial.println("Taring... (make sure scale is empty)");
+    Serial.println("Taring scale... (make sure scale is empty)");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Calibrating...");
+    lcd.setCursor(0, 1);
+    lcd.print("Please wait");
+
     scale.tare(); // Reset the scale to 0
-    Serial.println("Tare complete. Now place a known weight.");
+    Serial.println("✓ Scale tare complete. Now place a known weight.");
   }
+
+  delay(2000);
+
+  // Show final system status
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("System Ready!");
+  lcd.setCursor(0, 1);
+  if (WiFi.status() == WL_CONNECTED && feederSystem.mqttConnected)
+  {
+    lcd.print("All Online");
+    Serial.println("✓ All systems online and ready!");
+  }
+  else
+  {
+    lcd.print("Offline Mode");
+    Serial.println("⚠ System running in offline mode");
+  }
+  delay(2000);
+  Serial.println("Sensor initialization complete");
 }

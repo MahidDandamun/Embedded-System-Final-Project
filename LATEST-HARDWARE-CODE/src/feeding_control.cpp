@@ -11,7 +11,7 @@ void handleFeeding()
 
   // Start the feeding sequence
   Serial.println("Starting feeding sequence...");
-  myServo.write(180); // Open the servo to dispense food
+  myServo.write(90); // Open the servo to dispense food
   feederSystem.dispensing = true;
   timing.dispenseStartTime = millis();
 
@@ -51,7 +51,7 @@ void handleRemoteFeeding()
 
   // Start the feeding sequence (bypass timing restrictions for remote)
   Serial.println("Starting REMOTE feeding sequence...");
-  myServo.write(180); // Open the servo to dispense food
+  myServo.write(90); // Open the servo to dispense food
   feederSystem.dispensing = true;
   timing.dispenseStartTime = millis();
 
@@ -87,7 +87,7 @@ void performAutoFeed()
 {
   if (canDispenseFood() && !feederSystem.dispensing)
   {
-    myServo.write(180);
+    myServo.write(90);
     feederSystem.dispensing = true;
     timing.dispenseStartTime = millis();
     recordFoodDispensing("Scheduled");

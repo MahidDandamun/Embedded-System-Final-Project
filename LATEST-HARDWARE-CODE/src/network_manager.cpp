@@ -113,6 +113,14 @@ bool sendToDatabase()
     return false;
   }
 
+  // Update LCD to show database connection attempt
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Testing Database");
+  lcd.setCursor(0, 1);
+  lcd.print("Connection...");
+  Serial.println("Testing database connection...");
+
   HTTPClient https;
   https.begin("https://petfeeder-embedded.azurewebsites.net/api/devices/status");
 
@@ -120,7 +128,6 @@ bool sendToDatabase()
   https.addHeader("Accept", "application/json");
 
   StaticJsonDocument<512> doc;
-  // doc["timestamp"] = feederSystem.rtcReady ? formatDateTime(getPhilippineTime()) : String(millis());
   doc["bowl_weight"] = sensors.weight;
   doc["container_level"] = String(sensors.foodLevel);
   doc["pet_status"] = feederSystem.animalDetected;
@@ -129,22 +136,43 @@ bool sendToDatabase()
   serializeJson(doc, jsonStr);
 
   Serial.println("Sending HTTP POST to database...");
-  Serial.println(jsonStr);
+  Serial.println("JSON Payload: " + jsonStr);
 
   int httpCode = https.POST(jsonStr);
 
+  // Update LCD with database connection result
+  lcd.clear();
+  lcd.setCursor(0, 0);
   if (httpCode > 0)
   {
     Serial.printf("Database Response Code: %d\n", httpCode);
     String response = https.getString();
     Serial.printf("Response: %s\n", response.c_str());
+
+    if (httpCode == 200 || httpCode == 201)
+    {
+      lcd.print("Database: OK");
+      Serial.println("✓ Database connection successful");
+      feederSystem.backendConnected = true;
+    }
+    else
+    {
+      lcd.print("Database: ERROR");
+      lcd.setCursor(0, 1);
+      lcd.print("Code: " + String(httpCode));
+      Serial.printf("✗ Database error with code: %d\n", httpCode);
+    }
   }
   else
   {
     Serial.printf("✗ HTTP POST failed, error: %s\n", https.errorToString(httpCode).c_str());
+    lcd.print("Database: FAIL");
+    lcd.setCursor(0, 1);
+    lcd.print("Network Error");
   }
 
   https.end();
+  delay(1500); // Show result for 1.5 seconds
 
   return httpCode == 200 || httpCode == 201;
 }

@@ -15,5 +15,5 @@ bool checkForRemoteCommands();
 void setupTime();
 void handleDirectMethod(char *topic, byte *payload, unsigned int length);
 void processMQTTLoop();
-
+bool sendToDatabase();
 #endif

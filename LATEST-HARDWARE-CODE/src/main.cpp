@@ -34,8 +34,24 @@ void testDataSending()
 void setup()
 {
   systemStart();
-  pinMode(POWER_PIN, OUTPUT);
-  digitalWrite(POWER_PIN, HIGH);
+
+  // Test database connection during initialization
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    // Test database connection
+    sendToDatabase();
+  }
+
+  // Final initialization complete message
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Initialization");
+  lcd.setCursor(0, 1);
+  lcd.print("Complete!");
+  delay(2000);
+
+  // Clear LCD for normal operation
+  lcd.clear();
 
   // Add a delay then test (optional)
   delay(5000);
