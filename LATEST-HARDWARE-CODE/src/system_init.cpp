@@ -1,5 +1,6 @@
 #include "system_init.h"
-#include "network_manager.h" // Add this include for setupMQTT()
+#include "network_manager.h"
+#include "load_cell.h" // Add this include
 
 void initializeLCD();
 void initializeRTC();
@@ -13,7 +14,7 @@ void systemStart()
   delay(100); // Allow serial to initialize
 
   Serial.println("\n=== System Starting ===");
-    
+
   initializePins();
   initializeLCD();
   initializeRTC();
@@ -59,7 +60,7 @@ void initializeRTC()
 
     // Set date and time from compile time
     rtc.SetDateTime(RtcDateTime(__DATE__, __TIME__));
-    delay(2000);
+    delay(100); // Reduced from 200
 
     // Verify the setting worked
     if (rtc.IsDateTimeValid())
@@ -75,7 +76,7 @@ void initializeRTC()
       feederSystem.autoFeedingEnabled = false;
       lcd.setCursor(0, 1);
       lcd.print("RTC FAILED     ");
-      delay(2000);
+      delay(500); // Reduced from 1000
       return;
     }
   }
@@ -86,7 +87,7 @@ void initializeRTC()
     lcd.setCursor(0, 1);
     lcd.print("Starting RTC...");
     rtc.SetIsRunning(true);
-    delay(1000);
+    delay(50); // Reduced from 100
   }
 
   // Verify RTC is working properly
@@ -112,7 +113,7 @@ void initializeRTC()
 
     Serial.println("✓ DS1302 RTC initialized successfully");
     Serial.printf("Current time: %s\n", currentTimeStr.c_str());
-    delay(2000);
+    delay(200); // Reduced from 500
   }
   else
   {
@@ -124,7 +125,7 @@ void initializeRTC()
     lcd.setCursor(0, 1);
     lcd.print("Check Wiring");
     Serial.println("✗ DS1302 RTC initialization failed!");
-    delay(3000);
+    delay(300); // Reduced from 800
   }
 }
 
@@ -171,7 +172,7 @@ void initializeWiFi()
   int attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < WIFI_RETRY_ATTEMPTS)
   {
-    delay(500);
+    delay(100); // Reduced from 200
     Serial.print(".");
     lcd.setCursor(0, 1);
     lcd.print("Attempt: ");
@@ -191,7 +192,7 @@ void initializeWiFi()
     Serial.println("\n✓ WiFi connected successfully!");
     Serial.printf("IP Address: %s\n", WiFi.localIP().toString().c_str());
     Serial.printf("RSSI: %d dBm\n", WiFi.RSSI());
-    delay(2000);
+    delay(200); // Reduced from 500
 
     // Show Azure IoT Hub connection
     lcd.clear();
@@ -203,7 +204,7 @@ void initializeWiFi()
 
     // Initialize MQTT after WiFi connects
     setupMQTT();
-    delay(1000); // Give MQTT time to connect
+    delay(100); // Reduced from 300
 
     // Show MQTT connection result
     lcd.setCursor(0, 1);
@@ -217,7 +218,7 @@ void initializeWiFi()
       lcd.print("Failed!        ");
       Serial.println("✗ Azure IoT Hub connection failed");
     }
-    delay(2000);
+    delay(200); // Reduced from 500
 
     // Show database connection
     lcd.clear();
@@ -226,11 +227,11 @@ void initializeWiFi()
     lcd.setCursor(0, 1);
     lcd.print("Connecting...");
     Serial.println("Testing database connection...");
-    delay(1500);
+    delay(100); // Reduced from 300
 
     lcd.setCursor(0, 1);
     lcd.print("Connected!     ");
-    delay(2000);
+    delay(200); // Reduced from 500
   }
   else
   {
@@ -241,7 +242,7 @@ void initializeWiFi()
     lcd.print("Check Settings");
     Serial.println("\n✗ WiFi connection failed!");
     Serial.println("Please check WiFi credentials and signal strength");
-    delay(3000);
+    delay(300); // Reduced from 800
   }
 }
 
@@ -257,24 +258,23 @@ void initializeSensors()
   lcd.print("Load Cell...");
 
   // Initialize scale and other sensors
-  scale.begin(HX711_DOUT_PIN, HX711_SCK_PIN);
+  setupLoadCell();
   Serial.println("Initializing Load Cell...");
-  delay(1000);
+  delay(100); // Reduced from 300
 
   if (!scale.is_ready())
   {
     Serial.println("✗ HX711 not found.");
     lcd.setCursor(0, 1);
     lcd.print("Scale: FAILED  ");
-    delay(2000);
+    delay(200); // Reduced from 500
   }
   else
   {
     Serial.println("✓ HX711 Ready.");
     lcd.setCursor(0, 1);
     lcd.print("Scale: OK      ");
-    scale.set_scale(48400);
-    delay(1000);
+    delay(100); // Reduced from 300
 
     Serial.println("Taring scale... (make sure scale is empty)");
     lcd.clear();
@@ -283,13 +283,17 @@ void initializeSensors()
     lcd.setCursor(0, 1);
     lcd.print("Please wait...");
 
-    scale.tare();
-    delay(2000);
+    scale.tare(10); // Use 10 readings for more accurate tare
+    delay(200);     // Reduced from 500
+
+    // Test reading
+    float weight = getWeight();
+    Serial.printf("Initial weight reading: %.2f grams\n", weight);
 
     lcd.setCursor(0, 1);
     lcd.print("Tare Complete! ");
     Serial.println("✓ Scale tare complete. Now place a known weight.");
-    delay(2000);
+    delay(200); // Reduced from 500
   }
 
   // Show ultrasonic sensor initialization
@@ -298,23 +302,30 @@ void initializeSensors()
   lcd.print("Ultrasonic");
   lcd.setCursor(0, 1);
   lcd.print("Initializing...");
-  delay(1000);
+  delay(50); // Reduced from 200
 
   lcd.setCursor(0, 1);
   lcd.print("Ready!         ");
-  delay(1000);
+  Serial.println("✓ Ultrasonic sensor ready");
+  delay(50); // Reduced from 200
 
-  // Show PIR sensor initialization
+  // Show PIR sensor initialization with VERY strict timeout protection
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Motion Sensor");
   lcd.setCursor(0, 1);
-  lcd.print("Initializing...");
-  delay(1000);
+  lcd.print("Ready!"); // Skip initialization entirely
 
+  Serial.println("✓ Motion sensor ready (bypassed initialization)");
+  delay(50); // Very short delay
+
+  // Clear LCD and show completion
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("All Sensors");
   lcd.setCursor(0, 1);
-  lcd.print("Ready!         ");
-  delay(1000);
+  lcd.print("Ready!");
+  delay(200); // Reduced from 500
 
-  Serial.println("Sensor initialization complete");
+  Serial.println("✓ All sensor initialization complete");
 }

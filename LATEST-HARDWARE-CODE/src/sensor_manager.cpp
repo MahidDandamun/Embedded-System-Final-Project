@@ -1,5 +1,6 @@
 #include "sensor_manager.h"
-#include "feeding_control.h" // Add this include to access getFeedingStatus()
+#include "feeding_control.h" // Access getFeedingStatus()
+#include "load_cell.h"       // Add this to use the new load cell functions
 
 void handleSensors()
 {
@@ -19,7 +20,7 @@ void handleSensors()
   {
     if (scale.is_ready())
     {
-      sensors.weight = scale.get_units(SCALE_READINGS);
+      sensors.weight = getWeight();
       String status = getBowlStatus(sensors.weight);
       strcpy(sensors.bowlStatus, status.c_str()); // Copy String to char array
     }
@@ -65,18 +66,13 @@ String getFoodLevel(float distanceCm)
   {
     return String(FOOD_LEVEL_FULL);
   }
-  else if (distanceCm <= FOOD_HALF_DISTANCE) // > 9cm and ≤ 13.5cm
+  else if (distanceCm <= FOOD_HALF_DISTANCE && distanceCm >= FOOD_EMPTY_DISTANCE) // > 9cm and ≤ 13.5cm
   {
     return String(FOOD_LEVEL_HALF);
   }
-  else if (distanceCm > FOOD_EMPTY_DISTANCE) // > 18cm
+  else // > 18cm
   {
     return String(FOOD_LEVEL_EMPTY);
-  }
-  else // Between 13.5cm and 18cm - indeterminate zone
-  {
-    // In the indeterminate zone, consider it low but not empty
-    return String(FOOD_LEVEL_HALF); // Default to HALF for this range
   }
 }
 
@@ -95,7 +91,7 @@ void updateLoadCellReading()
 {
   if (scale.is_ready())
   {
-    float weight = scale.get_units(10); // average over 10 readings
+    float weight = getWeight(); // Use new function
     sensors.weight = weight;
     Serial.printf("Load Cell Weight: %.2f grams\n", weight);
 

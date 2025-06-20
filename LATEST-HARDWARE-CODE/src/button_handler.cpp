@@ -7,8 +7,8 @@ bool lastButton1State = HIGH;
 bool lastButton2State = HIGH;
 unsigned long lastButton1Press = 0;
 unsigned long lastButton2Press = 0;
-const unsigned long debounceDelay = 300;
-void performManualFeed(); // Forward declaration
+const unsigned long debounceDelay = 200; // Reduced from 300
+void performManualFeed();                // Forward declaration
 void initButtons()
 {
   pinMode(BUTTON1_PIN, INPUT_PULLUP);
@@ -30,9 +30,9 @@ void handleButtons()
   bool button2State = digitalRead(BUTTON2_PIN);
   unsigned long currentTime = millis();
 
-  // Debug button states periodically
+  // Debug button states periodically - reduced frequency
   static unsigned long lastDebugPrint = 0;
-  if (currentTime - lastDebugPrint > 5000) // Every 5 seconds
+  if (currentTime - lastDebugPrint > 10000) // Every 10 seconds instead of 5
   {
     Serial.printf("Button States - B1: %s (%s), B2: %s (%s), Dispensing: %s\n",
                   button1State ? "HIGH" : "LOW",
@@ -51,10 +51,10 @@ void handleButtons()
     Serial.println("=== BUTTON 1 PRESSED - Manual feed triggered ===");
     lastButton1Press = currentTime;
 
-    // Check if enough time has passed since last dispensing
-    bool canDispense = !feederSystem.dispensing && 
-                      (currentTime - timing.lastFeedingTime >= 1000); // Reduced from 5000ms to 1000ms
-    
+    // Check if enough time has passed since last dispensing - reduced cooldown
+    bool canDispense = !feederSystem.dispensing &&
+                       (currentTime - timing.lastFeedingTime >= 500); // Reduced from 1000ms to 500ms
+
     if (canDispense)
     {
       // Call performManualFeed directly to override all restrictions
@@ -64,18 +64,21 @@ void handleButtons()
     else
     {
       // Show a message explaining why we can't dispense
-      if (feederSystem.dispensing) {
+      if (feederSystem.dispensing)
+      {
         Serial.println("Cannot dispense - already dispensing (button press ignored)");
-      } else {
+      }
+      else
+      {
         Serial.println("Cannot dispense - cooldown period (button press ignored)");
-        
-        // Show cooldown message on LCD
+
+        // Show cooldown message on LCD - reduced delay
         lcd.clear();
         lcd.setCursor(0, 0);
         lcd.print("Please wait");
         lcd.setCursor(0, 1);
         lcd.print("Cooldown active");
-        delay(1000); // Show message briefly
+        delay(500); // Reduced from 1000ms
       }
     }
   }
@@ -93,13 +96,13 @@ void handleButtons()
     Serial.printf("Auto feeding is now: %s\n",
                   feederSystem.autoFeedingEnabled ? "ENABLED" : "DISABLED");
 
-    // Show status on LCD
+    // Show status on LCD - reduced delay
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Auto Feeding:");
     lcd.setCursor(0, 1);
     lcd.print(feederSystem.autoFeedingEnabled ? "ENABLED " : "DISABLED");
-    delay(2000);
+    delay(1000); // Reduced from 2000
   }
 
   // Update last states
@@ -120,7 +123,8 @@ void performManualFeed()
   lcd.setCursor(0, 0);
   lcd.print("Manual Dispensing");
 
-  // Servo dispensing: 90° to 45° and back, 3 times with 1s delay
+  // Servo dispensing: Move servo from 90 to 45 degrees and back, 3 times with 1s delay
+  // (Matching your working servo code exactly)
   for (int i = 0; i < 3; i++)
   {
     Serial.printf("Dispensing cycle %d/3\n", i + 1);
@@ -131,7 +135,7 @@ void performManualFeed()
     lcd.print(i + 1);
     lcd.print(" of 3     ");
 
-    // Move servo to 45 degrees (left)
+    // Move servo to 45 degrees (left) - matching your working code
     myServo.write(45);
 
     // Buzzer sound when moving
@@ -156,7 +160,7 @@ void performManualFeed()
     }
   }
 
-  // Final confirmation
+  // Final confirmation - reduced delay
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Complete!");
@@ -172,7 +176,7 @@ void performManualFeed()
     delay(150);
   }
 
-  delay(2000); // Show completion message
+  delay(500); // Reduced from 1000
 
   // Clear dispensing flag and update timing
   feederSystem.dispensing = false;
@@ -182,7 +186,7 @@ void performManualFeed()
   recordFoodDispensing("Manual Override");
 
   Serial.println("=== MANUAL FEEDING SEQUENCE COMPLETED ===");
-  Serial.println("Ready for next dispensing in 1 second");
+  Serial.println("Ready for next dispensing");
 }
 
 bool isButton1Pressed()

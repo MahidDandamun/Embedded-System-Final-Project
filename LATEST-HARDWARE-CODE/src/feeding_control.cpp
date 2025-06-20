@@ -1,5 +1,6 @@
 #include "feeding_control.h"
 #include "globals.h"
+#include "display_manager.h"
 void handleFeeding()
 {
   // IMPORTANT: Only handle auto-feeding here
@@ -32,20 +33,90 @@ void handleRemoteFeeding()
     return;
   }
 
-  // Start the feeding sequence (bypass timing restrictions for remote)
-  Serial.println("Starting REMOTE feeding sequence...");
-  myServo.write(45); // Move to dispense position
+  // Use the EXACT same dispensing pattern as manual feeding
+  Serial.println("=== STARTING REMOTE FEED SEQUENCE ===");
+
+  // Set dispensing flag immediately to prevent multiple triggers
   feederSystem.dispensing = true;
   timing.dispenseStartTime = millis();
 
-  // Record the food dispensing
+  // Display dispensing status on LCD
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Remote Dispensing");
+
+  // Servo dispensing: 90° to 45° and back, 3 times with 1s delay (SAME AS MANUAL)
+  for (int i = 0; i < 3; i++)
+  {
+    Serial.printf("Remote dispensing cycle %d/3\n", i + 1);
+
+    // Update LCD with cycle number
+    lcd.setCursor(0, 1);
+    lcd.print("Cycle ");
+    lcd.print(i + 1);
+    lcd.print(" of 3     ");
+
+    // Move servo to 45 degrees (left)
+    myServo.write(45);
+
+    // Buzzer sound when moving with LED feedback
+    digitalWrite(BUZZER_PIN, HIGH);
+    setRGBColor(RGB_BLUE); // Blue during remote dispensing
+    delay(200);
+    digitalWrite(BUZZER_PIN, LOW);
+    setRGBColor(RGB_OFF);
+
+    delay(500); // Wait in position
+
+    // Return servo to 90 degrees (center)
+    myServo.write(90);
+
+    // Buzzer sound when returning with LED feedback
+    digitalWrite(BUZZER_PIN, HIGH);
+    setRGBColor(RGB_BLUE);
+    delay(200);
+    digitalWrite(BUZZER_PIN, LOW);
+    setRGBColor(RGB_OFF);
+
+    // 1 second delay between cycles (except after last cycle)
+    if (i < 2)
+    {
+      delay(1000);
+    }
+  }
+
+  // Final confirmation (SAME AS MANUAL)
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Complete!");
+  lcd.setCursor(0, 1);
+  lcd.print("Food Dispensed");
+
+  // Final buzzer sequence with LED
+  for (int i = 0; i < 3; i++)
+  {
+    digitalWrite(BUZZER_PIN, HIGH);
+    setRGBColor(RGB_GREEN); // Green for completion
+    delay(150);
+    digitalWrite(BUZZER_PIN, LOW);
+    setRGBColor(RGB_OFF);
+    delay(150);
+  }
+
+  delay(500); // Reduced from 1000
+
+  // Clear dispensing flag and update timing
+  feederSystem.dispensing = false;
+  timing.lastFeedingTime = millis();
+
+  // Record the remote feeding
   recordFoodDispensing("Remote");
 
-  // Provide audio/visual feedback
-  buzzerBeepWithLED(BUZZER_PATTERN_SINGLE, BUZZER_MEDIUM_BEEP, 0, RGB_BLUE);
-  setRGBColor(RGB_BLUE);
+  // Restore food level LED
+  updateFoodLevelLED();
 
-  Serial.println("Remote food dispensing started");
+  Serial.println("=== REMOTE FEEDING SEQUENCE COMPLETED ===");
+  Serial.println("Ready for next dispensing");
 }
 
 // This function should be called in your main loop to check if dispensing is complete

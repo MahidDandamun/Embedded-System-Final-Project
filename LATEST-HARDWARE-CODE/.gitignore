@@ -3,3 +3,11 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+# Secret configuration files
+secrets.h
+.env
+secrets.ini
+config_secrets.ini
+
+include/secrets.h
+secrets.h

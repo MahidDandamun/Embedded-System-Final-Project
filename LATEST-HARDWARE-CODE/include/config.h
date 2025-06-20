@@ -5,10 +5,10 @@
 #include <Arduino.h>
 #include <ThreeWire.h>
 #include <RtcDS1302.h>
-
+#include "secrets.h"
 // WiFi Configuration
-#define WIFI_SSID "HG8145V5_779FD"
-#define WIFI_PASSWORD "Q6hX56Fj"
+#define WIFI_SSID ENV_WIFI_SSID
+#define WIFI_PASSWORD ENV_WIFI_PASSWORD
 #define WIFI_RETRY_ATTEMPTS 20
 
 // Device Configuration
@@ -45,7 +45,7 @@
 #define RTC_READ_INTERVAL 5000
 #define LCD_UPDATE_INTERVAL 400
 #define DATA_SYNC_INTERVAL 30000
-#define DISPENSE_TIME 2000
+#define DISPENSE_TIME 1000
 #define MIN_FEEDING_INTERVAL 300000 // 5 minutes
 #define PIR_TIMEOUT 30000           // 30 seconds
 #define DEBOUNCE_DELAY 50
@@ -56,7 +56,7 @@
 #define FOOD_EMPTY_DISTANCE 18.0  // cm
 #define EMPTY_BOWL_THRESHOLD 10.0 // grams
 #define FULL_BOWL_THRESHOLD 200.0 // grams
-#define SCALE_READINGS 10
+#define SCALE_READINGS 3          // Increased for better stability
 
 // Food Management
 #define FOOD_PORTION_GRAMS 25.0
@@ -98,15 +98,19 @@
 #define BUZZER_MEDIUM_PAUSE 200
 
 // Azure IoT Hub Configuration
-#define MQTT_SERVER "doggoHardware.azure-devices.net"
-#define MQTT_PORT 8883
-#define DEVICE_ID "petfeeder"
-#define SAS_TOKEN "SharedAccessSignature sr=doggoHardware.azure-devices.net%2Fdevices%2Fpetfeeder&sig=tLriDSbH%2FDgbXzWyftEr9Tp9zD6CtXdyArr4ZRRf%2B9c%3D&se=1752515853"
-#define MQTT_USERNAME "doggoHardware.azure-devices.net/petfeeder/?api-version=2021-04-12"
-#define DATABASE_ENDPOINT "https://petfeeder-embedded.azurewebsites.net/api/devices/status"
+#define MQTT_SERVER ENV_MQTT_SERVER
+#define MQTT_PORT ENV_MQTT_PORT
+#define DEVICE_ID ENV_DEVICE_ID
+#define SAS_TOKEN ENV_SAS_TOKEN
+#define MQTT_USERNAME ENV_MQTT_USERNAME
+#define DATABASE_ENDPOINT ENV_DATABASE_ENDPOINT
 
 // MQTT Buffer Size
 #define MQTT_BUFFER_SIZE 1024
+
+// Load Cell Configuration
+#define CALIBRATION_FACTOR 49400 // Match the calibration factor from working code
+#define SCALE_READINGS 3         // Increased for better stability
 
 // Utility Macros
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))

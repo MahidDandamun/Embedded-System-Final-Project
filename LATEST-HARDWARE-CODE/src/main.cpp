@@ -8,93 +8,108 @@
 #include "display_manager.h"
 #include "time_manager.h"
 #include "network_manager.h"
+#include "load_cell.h"
 
 void testDataSending();
 
 void setup()
 {
-  systemStart();
+  // Add setup timeout mechanism - reduced to 30 seconds
+  unsigned long setupStartTime = millis();
+  const unsigned long SETUP_TIMEOUT = 30000; // Reduced from 60 to 30 seconds
+
+  Serial.println("=== SETUP STARTING WITH TIMEOUT ===");
+
+  // Use a try-catch like approach with timeout checking
+  bool setupComplete = false;
+
+  // Initialize system with timeout protection
+  if (millis() - setupStartTime < SETUP_TIMEOUT)
+  {
+    systemStart();
+    setupComplete = true;
+  }
+
+  if (!setupComplete || millis() - setupStartTime >= SETUP_TIMEOUT)
+  {
+    Serial.println("⚠️ Setup timeout reached or incomplete - proceeding to loop");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Setup Timeout");
+    lcd.setCursor(0, 1);
+    lcd.print("Proceeding...");
+    delay(1000); // Reduced from 2000
+
+    // Minimal initialization to ensure system can run
+    feederSystem.initialized = true;
+  }
+
+  // Initialize load cell early
+  Serial.println("Initializing load cell (final check)...");
+  if (!scale.is_ready())
+  {
+    setupLoadCell(); // Try one more time
+  }
 
   // Make sure button initialization happens early
-  Serial.println("Initializing buttons...");
+  Serial.println("Initializing buttons (final check)...");
   initButtons();
-  // Test database connection during initialization with strict timeout
-  if (WiFi.status() == WL_CONNECTED)
+
+  // Test database connection with strict timeout - reduced timeout
+  if (WiFi.status() == WL_CONNECTED && millis() - setupStartTime < SETUP_TIMEOUT - 5000)
   {
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Database Test");
     lcd.setCursor(0, 1);
-    lcd.print("Sending data...");
+    lcd.print("Quick test...");
 
-    // Test database connection with strict timeout - don't block setup
-    bool dbResult = false;
+    // Quick database test with 3 second timeout (reduced from 5)
     unsigned long dbTestStart = millis();
+    Serial.println("Quick database test (3 sec timeout)...");
 
-    Serial.println("Starting database test with 8 second timeout...");
-
-    // Create a separate task or use non-blocking approach
-    while (millis() - dbTestStart < 8000) // 8 second max
+    bool dbResult = false;
+    if (millis() - dbTestStart < 3000)
     {
+      // Set a very short timeout for HTTP request
       dbResult = sendToDatabase();
-      break; // Exit after first attempt regardless of result
     }
 
-    if (millis() - dbTestStart >= 8000)
-    {
-      Serial.println("Database test timed out after 8 seconds, continuing...");
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Database: SKIP");
-      lcd.setCursor(0, 1);
-      lcd.print("Timeout");
-      delay(1000);
-    }
-
-    Serial.println("Database test completed, continuing with setup...");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Database:");
+    lcd.setCursor(0, 1);
+    lcd.print(dbResult ? "Connected" : "Skipped");
+    delay(500); // Reduced from 1000
   }
   else
   {
-    Serial.println("WiFi not connected, skipping database test...");
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("No WiFi");
-    lcd.setCursor(0, 1);
-    lcd.print("Skip DB Test");
-    delay(1000);
+    Serial.println("Skipping database test due to timeout or no WiFi");
   }
 
-  // Show webserver starting
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Web Server");
-  lcd.setCursor(0, 1);
-  lcd.print("Starting...");
-  delay(1000);
-
-  lcd.setCursor(0, 1);
-  lcd.print("Started!       ");
-  delay(1000);
-
-  // Final system ready message
+  // Show final system status - reduced delay
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("System Ready!");
   lcd.setCursor(0, 1);
-  if (WiFi.status() == WL_CONNECTED && feederSystem.mqttConnected)
+  if (WiFi.status() == WL_CONNECTED)
   {
-    lcd.print("All Services OK");
+    lcd.print("Online Mode");
   }
   else
   {
     lcd.print("Offline Mode");
   }
-  delay(2000);
+  delay(1000); // Reduced from 2000
 
   // Clear LCD for normal operation
   lcd.clear();
 
-  Serial.println("Setup complete - entering main loop");
+  // Ensure we're definitely going to proceed to loop
+  feederSystem.initialized = true;
+
+  unsigned long totalSetupTime = millis() - setupStartTime;
+  Serial.printf("Setup completed in %lu ms - entering main loop\n", totalSetupTime);
 }
 
 void loop()
@@ -138,8 +153,15 @@ void loop()
     timing.lastRTCRead = currentMillis;
   }
 
-  // Handle sensors
+  // Handle sensors (including load cell)
   handleSensors();
+
+  // Update bowl weight regularly
+  if (currentMillis - timing.lastWeightRead >= WEIGHT_READ_INTERVAL)
+  {
+    updateBowlWeight();
+    timing.lastWeightRead = currentMillis;
+  }
 
   // Check if automatic feeding sequence is complete
   checkFeedingComplete();

@@ -122,7 +122,7 @@ bool sendToDatabase()
   Serial.println("Testing database connection...");
 
   HTTPClient https;
-  https.setTimeout(5000); // Reduced to 5 second timeout
+  https.setTimeout(3000); // Reduced to 3 second timeout
   https.begin("https://petfeeder-embedded.azurewebsites.net/api/devices/status");
 
   https.addHeader("Content-Type", "application/json");
@@ -157,7 +157,7 @@ bool sendToDatabase()
 
   int httpCode = https.POST(jsonStr);
 
-  // Update LCD with database connection result
+  // Update LCD with database connection result - reduced delay
   lcd.clear();
   lcd.setCursor(0, 0);
   if (httpCode > 0)
@@ -192,7 +192,7 @@ bool sendToDatabase()
   }
 
   https.end();
-  delay(1500); // Show result for 1.5 seconds
+  delay(750); // Reduced from 1500 to 750ms
 
   return httpCode == 200 || httpCode == 201;
 }
@@ -327,20 +327,12 @@ void handleDirectMethod(char *topic, byte *payload, unsigned int length)
     {
       Serial.println("Processing runMotors command...");
 
-      // Add debugging info
-      Serial.printf("Current time: %lu ms\n", millis());
-      Serial.printf("Last feeding time: %lu ms\n", timing.lastFeedingTime);
-      Serial.printf("Time since last feeding: %lu ms\n", millis() - timing.lastFeedingTime);
-      Serial.printf("Required interval: %lu ms\n", MIN_FEEDING_INTERVAL);
-      Serial.printf("Currently dispensing: %s\n", feederSystem.dispensing ? "YES" : "NO");
-      Serial.printf("Remote feeding status: %s\n", getRemoteFeedingStatus().c_str());
-
-      // Use remote feeding logic that bypasses timing restrictions
-      if (canDispenseFoodRemote() && !feederSystem.dispensing)
+      // Use the exact same dispensing logic as manual button press
+      if (!feederSystem.dispensing)
       {
-        // Execute the remote feeding sequence
-        Serial.println("Starting remote feeding sequence...");
-        handleRemoteFeeding();
+        // Call the EXACT same function as manual button press
+        Serial.println("Starting remote feeding sequence (using manual dispensing logic)...");
+        performManualFeed(); // Use the same function as manual button
         Serial.println("Remote motors sequence executed successfully");
 
         // Send success response
@@ -350,16 +342,7 @@ void handleDirectMethod(char *topic, byte *payload, unsigned int length)
       else
       {
         // Cannot dispense food - send appropriate error
-        String reason = "";
-        if (feederSystem.dispensing)
-        {
-          reason = "Motors already running";
-        }
-        else if (!canDispenseFoodRemote())
-        {
-          reason = getRemoteFeedingStatus(); // This will give us the specific reason
-        }
-
+        String reason = "Motors already running";
         Serial.println("Cannot run motors: " + reason);
 
         // Send error response with specific reason
